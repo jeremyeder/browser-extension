@@ -112,7 +112,7 @@ export interface ExtensionSettings {
 }
 
 export const DEFAULT_SETTINGS: ExtensionSettings = {
-  apiEndpoint: '',
+  apiEndpoint: 'https://ambient-api-server-ambient-code.apps.rosa.jeder-prerel.8btk.p3.openshiftapps.com',
   proxyEndpoint: '',
   anthropicApiKey: '',
   modelId: 'claude-sonnet-4-6',
