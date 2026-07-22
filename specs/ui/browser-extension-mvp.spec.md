@@ -346,3 +346,13 @@ side panel directly without requiring pinning. The onboarding wizard or
 first-run experience SHOULD include a visual instruction telling the user
 to pin the extension: "Click the puzzle piece icon → find Enterprise
 Assistant → click the pin icon."
+
+### Onboarding Welcome Copy
+The welcome screen SHALL communicate the Enterprise Assistant vision:
+- This is the user's first connection to ACP
+- They are building a personal Enterprise Assistant that goes with them everywhere
+- The EA connects to systems of record (Google Workspace, Jira, GitHub, GitLab)
+- It develops long-term memory about how the user works
+- Over time it becomes a "second brain at work" for information, automation, and staying on top of what matters
+- Available through CLI, browser extension, web UI, and mobile app
+- CTA: "Build My Assistant" (primary) / "Skip — use defaults" (ghost)
