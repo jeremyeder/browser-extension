@@ -1033,3 +1033,68 @@ The Browser Extension SHALL rely on the selected mode's bearer authorization and
 ## Migration Plan
 
 `components/browser-extension/` is the canonical Browser Extension component. Enterprise Agent generation adds authenticated-self discovery, non-mutating preview, and atomic provisioning operations but no new public ACP entity or browser-specific backend. Platform-owned typed configuration, managed agentic-memory attachment, transactional outbox, Session snapshot, and lease persistence are explicitly permitted and required by the Enterprise Assistant contracts. New Enterprise Agents use registered `ambient-code.io/` provenance annotations, a dedicated canonical-User-owned Project, and local binding only as a revalidated cache. The Artoo starter is provisioned from the registered template without a managed agentic-memory attachment; Enterprise Assistant onboarding remains the explicit path for configuring managed agentic memory. Deployment, release, OpenAPI, and route evidence establish that generated Personal Agent self-service routes never shipped, so there is no legacy generated server resource set to adopt or migrate. Legacy Personal Assistant migration is limited to per-key, safely attributable browser-local records and exact manually selected bindings; a current generated binding comes only from authenticated-self Enterprise Agent GET. An exact manually selected legacy Agent remains a separately labeled manual binding under current RBAC and is never relabeled, annotated, or cached as generated state. A migrated cache does not suppress authenticated-self discovery, onboarding when no generated Enterprise Agent exists, or the server-derived memory notice. vTeam binding continues to use generic authenticated-self read through `GET /api/ambient/v1/users/me`. The Browser Extension reads the Enterprise Agent composite, the additive `bootstrap` event type, and existing Agent Start, SessionMessage, and Session lineage contracts while preserving exact-digest fallback for immutable legacy startup rows stored as `user`. Existing username-valued RoleBinding subjects SHALL be mapped and migrated server-side to canonical opaque User IDs; a missing or ambiguous legacy mapping fails closed. Existing product-swarm reporting annotations remain authoritative. Ordinary Session controls use the existing direct Session compatibility endpoints; any future removal SHALL migrate the Browser Extension in the same change. Repository build, test, CI, and release surfaces SHALL consume the component's deterministic package and exact extracted-artifact QA contracts. Existing manual server/project configuration remains valid; importing local Kind connections is optional and stores no new authoritative server entity or credential. A legacy user-entered issuer value SHALL NOT remain authoritative after upgrade: `Sign in with ACP` SHALL retain the ACP origin, project, and other non-secret settings, clear legacy OIDC token material, remove the obsolete legacy issuer-origin permission immediately when no active configuration shares it, rediscover authentication metadata from ACP, and make at most one silent authorization attempt unless a scoped local sign-out marker suppresses it. Failed rediscovery presents the signed-out state without restoring the legacy issuer, tokens, or obsolete permission.
+
+## Implementation Decisions (2026-07-22)
+
+The following decisions were made during the initial MVP build and override or
+refine the general requirements above. ACP agent sessions implementing this spec
+MUST follow these decisions.
+
+### Decision: ACP-First Settings
+The Settings page SHALL show only:
+1. **Agent Control Plane** section — a single "ACP Server URL" field
+2. **Behavior** section — notification toggle only (no page-context toggle, no auto-summarize toggle)
+3. **Appearance** section — theme selector (system/light/dark)
+
+There SHALL be no Anthropic API key field, no direct Anthropic Base URL field,
+no Enterprise SSO provider picker, no Client ID field, no Okta domain field.
+The extension connects exclusively through ACP; model routing and credential
+management are ACP's responsibility.
+
+### Decision: Side Panel (Not Popup)
+The manifest SHALL use `side_panel.default_path` and `sidePanel` permission.
+`action.default_popup` SHALL NOT be set. `setPanelBehavior({ openPanelOnActionClick: true })`
+SHALL be called on install so clicking the toolbar icon opens the side panel.
+The side panel HTML SHALL use `min-height: 100vh` (no fixed width/max-height).
+
+### Decision: Inline Keycloak Login
+Authentication SHALL use Keycloak's Resource Owner Password Credentials grant
+(direct token request) with the credentials entered in form fields inside the
+side panel. `chrome.identity.launchWebAuthFlow` SHALL NOT be used. No external
+popup or tab SHALL open during login. The login form shows username, password,
+an inline error message, and a submit button. On success, the form is replaced
+by the main chat interface.
+
+### Decision: Keycloak Issuer Derived from ACP URL
+When `ssoKeycloakIssuer` is blank, the auth manager SHALL derive it by replacing
+`ambient-api-server-` with `keycloak-` in the ACP Server URL hostname, appending
+`/realms/ambient-code`. The Keycloak client ID SHALL be `acp-browser-extension`.
+
+### Decision: Dark Theme with Instant Preview
+The theme selector SHALL apply the theme immediately on change (before save)
+via `data-theme` attribute on `:root`. Both popup/side-panel CSS and options CSS
+SHALL have `:root[data-theme="dark"]` variable overrides.
+
+### Decision: Page Context Opt-In Per Page
+`enablePageContext` SHALL default to `false`. The chat input area SHALL include
+a persistent "attach page context" button that captures the current foreground
+tab's content when clicked. There is no global auto-include setting.
+
+### Decision: Pinned Extension ID
+The manifest SHALL include a `key` field to produce a stable extension ID across
+installs. The Keycloak client's `redirectUris` SHALL include the exact
+`https://<extension-id>.chromiumapp.org/*` pattern.
+
+### Decision: ACP Session Integration (NOT Direct API)
+The chat interface SHALL create and manage Sessions through the ACP API server,
+NOT make direct calls to Anthropic or Vertex AI. Chat messages are sent via
+`POST /api/ambient/v1/sessions/{id}/messages` and streamed via
+`GET /api/ambient/v1/sessions/{id}/messages` (SSE). The extension does not need
+an Anthropic API key or model configuration — ACP handles inference routing.
+
+### Decision: Enterprise Agent Lifecycle
+On first authenticated load, the extension SHALL call
+`GET /api/ambient/v1/users/me/enterprise-agent` to discover or provision the
+user's Enterprise Agent. If none exists, it SHALL show the Artoo provisioning
+wizard per the Enterprise Assistant specs. The extension SHALL NOT allow
+creating arbitrary agents — it works with exactly one Enterprise Agent per user.
