@@ -1,5 +1,11 @@
 import type { ApiMessage, Session, EnterpriseAgent } from '../types';
 
+interface RawMessage {
+  event_type: string;
+  payload?: string;
+  seq?: number;
+}
+
 export class ACPClient {
   constructor(
     private readonly baseUrl: string,
@@ -64,15 +70,19 @@ export class ACPClient {
       `/api/ambient/v1/sessions/${sessionId}/messages`,
       {
         method: 'POST',
-        body: JSON.stringify({ role: 'user', content }),
+        body: JSON.stringify({ event_type: 'user', payload: content }),
       }
     );
   }
 
   async getMessages(sessionId: string): Promise<ApiMessage[]> {
-    return this.request<ApiMessage[]>(
+    const data = await this.request<{ items?: RawMessage[] } | RawMessage[]>(
       `/api/ambient/v1/sessions/${sessionId}/messages`
     );
+    const items = Array.isArray(data) ? data : (data.items ?? []);
+    return items
+      .filter((m) => m.event_type === 'user' || m.event_type === 'assistant')
+      .map((m) => ({ role: m.event_type as 'user' | 'assistant', content: m.payload ?? '' }));
   }
 
   async getSession(sessionId: string): Promise<Session> {

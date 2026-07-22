@@ -1098,3 +1098,15 @@ On first authenticated load, the extension SHALL call
 user's Enterprise Agent. If none exists, it SHALL show the Artoo provisioning
 wizard per the Enterprise Assistant specs. The extension SHALL NOT allow
 creating arbitrary agents — it works with exactly one Enterprise Agent per user.
+
+### Decision: Session Discovery via Annotations
+Enterprise Assistant sessions SHALL be discoverable by annotation
+`ambient-code.io/enterprise-agent: true` on the Session resource. When the
+browser extension or CLI needs to reconnect, it queries sessions filtered by
+this annotation rather than scanning all sessions by agent_id. This enables
+multiple clients (browser, CLI, UI) to find the same persistent session.
+
+### Decision: ACP Message API Field Names
+The ACP sessions messages API uses `event_type` (not `role`) and `payload`
+(not `content`). Valid event types include `user` and `assistant`. The extension
+maps these to the standard role/content model internally.
