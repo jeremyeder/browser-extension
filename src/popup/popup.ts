@@ -5,6 +5,16 @@ import { ACPClient } from '../lib/acp-client';
 import { renderMarkdown } from '../utils/markdown';
 import type { AuthTokens, Settings, EnterpriseAgent, ApiMessage, PageContext } from '../types';
 
+const ARTOO_GREETING =
+  "Hi! I'm **Artoo**, your new Enterprise Assistant. I can help with:\n\n" +
+  "- **Manage sessions** — start, monitor, and review agentic coding sessions\n" +
+  "- **Orchestrate agents** — coordinate agent teams across projects\n" +
+  "- **Schedule work** — set up recurring tasks and automated workflows\n" +
+  "- **Choose models** — pick the right model for each task\n" +
+  "- **Write emails & calendar** — draft messages, schedule meetings, manage your day\n" +
+  "- **Connect to your tools** — Jira, GitHub, GitLab, Google Workspace, and more\n\n" +
+  "Over time I'll learn how you work and become your second brain. What would you like to start with?";
+
 // ─── State ────────────────────────────────────────────────────────────────────
 
 interface AppState {
@@ -595,30 +605,38 @@ async function initChatView(): Promise<void> {
       return;
     }
 
-    // Show Artoo's greeting immediately from template — session boots in background
     showView('chat');
     messagesEl.innerHTML = '';
-    appendAssistantMessage(
-      "Hi! I'm **Artoo**, your new Enterprise Assistant. I can help with:\n\n" +
-      "- **Manage sessions** — start, monitor, and review agentic coding sessions\n" +
-      "- **Orchestrate agents** — coordinate agent teams across projects\n" +
-      "- **Schedule work** — set up recurring tasks and automated workflows\n" +
-      "- **Choose models** — pick the right model for each task\n" +
-      "- **Write emails & calendar** — draft messages, schedule meetings, manage your day\n" +
-      "- **Connect to your tools** — Jira, GitHub, GitLab, Google Workspace, and more\n\n" +
-      "Over time I'll learn how you work and become your second brain. What would you like to start with?"
-    );
 
-    // Boot session in background — ready by the time user finishes typing
-    void (async () => {
+    // Try to reconnect to existing session
+    const existingSession = await client.findExistingSession(state.agent?.id ?? '');
+    if (existingSession && (existingSession.phase === 'Running' || existingSession.phase === 'Creating' || existingSession.phase === 'Pending')) {
+      state.sessionId = existingSession.id;
+      await StorageManager.setCurrentSessionId(existingSession.id);
+      // Load previous messages
       try {
-        const sid = await ensureSession(client);
-        state.sessionId = sid;
-        await StorageManager.setCurrentSessionId(sid);
-      } catch (err) {
-        appendErrorMessage('Failed to start session: ' + (err instanceof Error ? err.message : String(err)));
+        const msgs = await client.getMessages(existingSession.id);
+        if (msgs.length > 0) {
+          renderMessages(msgs);
+        } else {
+          appendAssistantMessage(ARTOO_GREETING);
+        }
+      } catch {
+        appendAssistantMessage(ARTOO_GREETING);
       }
-    })();
+    } else {
+      // No existing session — show greeting and boot in background
+      appendAssistantMessage(ARTOO_GREETING);
+      void (async () => {
+        try {
+          const sid = await ensureSession(client);
+          state.sessionId = sid;
+          await StorageManager.setCurrentSessionId(sid);
+        } catch (err) {
+          appendErrorMessage('Failed to start session: ' + (err instanceof Error ? err.message : String(err)));
+        }
+      })();
+    }
   } catch (err) {
     console.error('Chat init failed:', err);
     await StorageManager.clearTokens();

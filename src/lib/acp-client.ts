@@ -48,6 +48,20 @@ export class ACPClient {
 
   private static readonly EA_ANNOTATION = 'ambient-code.io/enterprise-agent';
 
+  async findExistingSession(agentId: string): Promise<Session | null> {
+    try {
+      const data = await this.request<{ items: Session[] }>('/api/ambient/v1/sessions');
+      const annotated = data.items?.find((s) => {
+        const ann = typeof s.annotations === 'string' ? s.annotations : '';
+        return ann.includes(ACPClient.EA_ANNOTATION);
+      });
+      if (annotated) return annotated;
+      return data.items?.find((s) => s.agent_id === agentId) ?? null;
+    } catch {
+      return null;
+    }
+  }
+
   async findOrCreateSession(agentId: string, projectId: string): Promise<Session> {
     const data = await this.request<{ items: Session[] }>('/api/ambient/v1/sessions');
 
