@@ -211,10 +211,12 @@ async function sendMessage(): Promise<void> {
       await StorageManager.setCurrentSessionId(sessionId);
     }
 
+    // Connect to AG-UI stream FIRST, then send the message
+    // so we catch the response as it starts
+    const streamPromise = streamReply(sessionId);
+    await sleep(200); // let EventSource connect
     await client.sendMessage(sessionId, content);
-
-    // Stream the reply via SSE
-    await streamReply(sessionId);
+    await streamPromise;
   } catch (err) {
     appendErrorMessage(err instanceof Error ? err.message : 'Failed to send message');
   } finally {
