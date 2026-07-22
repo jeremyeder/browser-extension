@@ -205,7 +205,7 @@ async function sendMessage(): Promise<void> {
     let sessionId = state.sessionId;
     if (!sessionId) {
       if (!state.agent) throw new Error('No enterprise agent found');
-      const session = await client.createSession(state.agent.id, state.agent.projectId ?? 'enterprise-assistant');
+      const session = await client.findOrCreateSession(state.agent.id, state.agent.projectId ?? 'enterprise-assistant');
       sessionId = session.id;
       state.sessionId = sessionId;
       await StorageManager.setCurrentSessionId(sessionId);

@@ -40,7 +40,14 @@ export class ACPClient {
     }
   }
 
-  async createSession(agentId: string, projectId: string): Promise<Session> {
+  async findOrCreateSession(agentId: string, projectId: string): Promise<Session> {
+    // Reuse existing running session for this agent
+    const data = await this.request<{ items: Session[] }>('/api/ambient/v1/sessions');
+    const existing = data.items?.find(
+      (s) => s.agent_id === agentId && (s.phase === 'Running' || s.phase === 'Creating' || s.phase === 'Pending')
+    );
+    if (existing) return existing;
+
     return this.request<Session>('/api/ambient/v1/sessions', {
       method: 'POST',
       body: JSON.stringify({

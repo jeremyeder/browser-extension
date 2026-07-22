@@ -20,6 +20,9 @@ export interface ApiMessage {
 export interface Session {
   id: string;
   status: string;
+  phase?: string;
+  agent_id?: string;
+  project_id?: string;
   createdAt: string;
   agentId?: string;
 }
