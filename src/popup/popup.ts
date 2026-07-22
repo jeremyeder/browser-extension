@@ -529,10 +529,8 @@ document.querySelectorAll('.onboarding-next').forEach((btn) => {
 
 async function completeOnboarding(): Promise<void> {
   const displayName = (document.getElementById('ob-name') as HTMLInputElement)?.value || 'Artoo';
-  await StorageManager.saveSettings({
-    ...state.settings,
-    onboardingComplete: true,
-  });
+  state.settings = { ...state.settings, onboardingComplete: true };
+  await StorageManager.saveSettings(state.settings);
   el('agent-name').textContent = displayName;
   await initChatView();
 }
