@@ -423,3 +423,11 @@ Settings SHALL include an "Enable show thinking" toggle that renders the
 model's reasoning/thinking tokens in a collapsible block above the
 assistant's response. Requires the ACP runner to forward thinking events
 via the sessions messages API.
+
+### Blocker: SSE proxy doesn't work with OpenShell gateway mode
+The API server's `/sessions/{id}/events` and `/sessions/{id}/agui/events`
+SSE proxies connect directly to `session-{name}.{namespace}:8001` — but
+OpenShell gateway sandboxes don't expose pod services. The SSE proxy needs
+to route through the gateway's exec/events API instead of direct pod access.
+Until fixed, the browser extension falls back to REST polling.
+Tracked: https://github.com/openshift-online/agent-control-plane/issues/422
