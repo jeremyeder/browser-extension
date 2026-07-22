@@ -25,6 +25,7 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   if (details.reason === 'install') {
     await storage.setSettings(DEFAULT_SETTINGS);
     await chrome.sidePanel.setOptions({ enabled: true });
+    await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
   } else if (details.reason === 'update') {
     const current = await storage.getSettings();
     if (current.ssoProvider !== 'keycloak') {
