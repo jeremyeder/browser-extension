@@ -3,6 +3,21 @@ import { renderMarkdown } from '../utils/markdown';
 import { BUILT_IN_TEMPLATES, fillTemplate } from '../utils/prompt-templates';
 import './popup.css';
 
+// ── Theme ─────────────────────────────────────────────────────────────────
+async function applyTheme() {
+  const data = await chrome.storage.local.get('settings');
+  const theme = data.settings?.theme ?? 'system';
+  if (theme === 'system') {
+    document.documentElement.removeAttribute('data-theme');
+  } else {
+    document.documentElement.setAttribute('data-theme', theme);
+  }
+}
+applyTheme();
+chrome.storage.onChanged.addListener((changes) => {
+  if (changes.settings) applyTheme();
+});
+
 // ── State ──────────────────────────────────────────────────────────────────
 let authState: AuthState = { isAuthenticated: false };
 let currentSessionId: string | null = null;

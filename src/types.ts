@@ -122,7 +122,7 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   ssoClientId: 'ambient-browser-extension',
   ssoOktaDomain: '',
   ssoKeycloakIssuer: '',
-  enablePageContext: true,
+  enablePageContext: false,
   enableAutoSummarize: false,
   enableTaskSync: false,
   theme: 'system',
