@@ -145,9 +145,22 @@ Returns array of event objects. The extension:
    session start) — conversation starts from the assistant's greeting
 3. Maps to `{ role, content }` for rendering
 
-### Reply polling
+### Reply Delivery
+The MVP uses REST polling. SSE streaming code exists but is disabled
+until the API server's event proxy supports OpenShell gateway mode.
+
+**Polling (active)**:
 After sending, poll `GET .../messages` every 1.5 seconds for up to 5 minutes.
-Show typing indicator while polling. New assistant message = reply found.
+Typing indicator (animated dots) stays visible throughout polling.
+When a new assistant message appears, render it and hide the indicator.
+
+**SSE streaming (disabled, code retained)**:
+`GET /api/ambient/v1/sessions/{id}/agui/events` with `Accept: text/event-stream`.
+AG-UI events: `TEXT_MESSAGE_CONTENT` (token delta), `TEXT_MESSAGE_END`,
+`RUN_FINISHED`. The SSE proxy in the API server connects directly to the
+runner pod — this path does not work with OpenShell gateway sandboxes
+because pods are not directly addressable. Re-enable when gateway event
+proxying is available.
 
 ## Onboarding Wizard
 
@@ -198,8 +211,10 @@ an existing session (not on first use where the greeting is immediate).
 
 ### Bootstrap Message Filtering
 The first few messages in a session are ACP bootstrap (system prompt, agent
-instructions). These SHALL NOT be shown to the user. The conversation starts
-from the assistant's greeting message.
+instructions injected as `event_type: "user"`). These SHALL NOT be shown.
+Filtering is position-based, not content-based: skip all messages before
+the last assistant message that precedes the first real user interaction.
+No string-matching of prompt content.
 
 ### Input Area
 - Multiline textarea with auto-grow (max 120px)
@@ -431,12 +446,19 @@ assistant's response. Requires the ACP runner to forward thinking events
 via the sessions messages API.
 
 ### Blocker: SSE proxy doesn't work with OpenShell gateway mode
-The API server's `/sessions/{id}/events` and `/sessions/{id}/agui/events`
-SSE proxies connect directly to `session-{name}.{namespace}:8001` — but
-OpenShell gateway sandboxes don't expose pod services. The SSE proxy needs
-to route through the gateway's exec/events API instead of direct pod access.
-Until fixed, the browser extension falls back to REST polling.
+The API server's SSE proxies (`/sessions/{id}/events`, `/sessions/{id}/agui/events`)
+connect directly to `session-{name}.{namespace}:8001`. OpenShell gateway
+sandboxes don't expose pod services — connection refused. The proxy needs
+to route through the gateway. The extension retains the SSE streaming code
+(`_streamReply`) but calls `fallbackPoll` instead.
 Tracked: https://github.com/openshift-online/agent-control-plane/issues/422
+
+When re-enabling SSE:
+1. Connect to `/agui/events` BEFORE sending the message
+2. Parse `data:` lines for AG-UI event JSON
+3. Create a live-updating message div on first `TEXT_MESSAGE_CONTENT`
+4. Append deltas as `textContent`, render markdown on `TEXT_MESSAGE_END`
+5. Fall back to polling if SSE returns empty 200 or 502
 
 ### Input Area Details
 - Textarea: 2 rows default, monospace font (`var(--font-mono)`), vertically resizable
