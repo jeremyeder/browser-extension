@@ -13,13 +13,6 @@ const storage = new StorageManager();
 const auth = new AuthManager(storage);
 const assistant = new AssistantClient(storage);
 
-// Open side panel on toolbar icon click
-chrome.action.onClicked.addListener(async (tab) => {
-  if (tab.id) {
-    await chrome.sidePanel.open({ tabId: tab.id });
-  }
-});
-
 // Initialize on install or update
 chrome.runtime.onInstalled.addListener(async (details) => {
   if (details.reason === 'install') {
