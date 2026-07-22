@@ -441,7 +441,7 @@ async function ensureSession(client: ACPClient): Promise<string> {
   }
 
   // Pending/Creating — wait for it
-  showBootScreen('Starting your Enterprise Assistant. This takes 1–2 minutes for new users...');
+  showBootScreen('Looking for Artoo...');
   return await waitForSessionReady(session.id, client);
 }
 
