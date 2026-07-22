@@ -404,3 +404,18 @@ The E2E test suite SHALL include a `session-boot-perf` test that:
 2. Asserts total boot ≤ Max Acceptable for the detected environment
 3. Logs the phase timeline (Pending→Creating→Running with durations)
 4. Fails CI if the target regresses by >20% from the baseline
+
+### Next Phase: SSE Streaming
+The MVP uses REST polling (every 1.5s) for message retrieval. The next
+phase SHALL implement SSE streaming for real-time token-by-token rendering.
+ACP exposes gRPC `WatchSessionMessages` but no REST SSE proxy currently
+exists. Options:
+1. Add an SSE proxy endpoint to the API server (preferred)
+2. Use gRPC-Web from the browser extension
+3. Continue fast polling (500ms) with incremental message rendering
+
+### Next Phase: Show Thinking
+Settings SHALL include an "Enable show thinking" toggle that renders the
+model's reasoning/thinking tokens in a collapsible block above the
+assistant's response. Requires the ACP runner to forward thinking events
+via the sessions messages API.
