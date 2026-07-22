@@ -80,8 +80,28 @@ export class ACPClient {
       `/api/ambient/v1/sessions/${sessionId}/messages`
     );
     const items = Array.isArray(data) ? data : (data.items ?? []);
-    return items
-      .filter((m) => m.event_type === 'user' || m.event_type === 'assistant')
+    const userAndAssistant = items.filter(
+      (m) => m.event_type === 'user' || m.event_type === 'assistant'
+    );
+
+    // Skip bootstrap messages (ACP injects system prompt + agent instructions at session start).
+    // Find the first user message sent AFTER the initial assistant greeting.
+    let firstAssistantIdx = userAndAssistant.findIndex((m) => m.event_type === 'assistant');
+    if (firstAssistantIdx === -1) firstAssistantIdx = 0;
+
+    // Find the first user message after the assistant's greeting — that's the real conversation start
+    let conversationStart = userAndAssistant.findIndex(
+      (m, i) => i > firstAssistantIdx && m.event_type === 'user'
+    );
+
+    // If no user message after greeting, show from the greeting onward
+    if (conversationStart === -1) conversationStart = firstAssistantIdx;
+
+    // Include the last assistant greeting message before the first real user message
+    const startIdx = Math.max(0, conversationStart - 1);
+
+    return userAndAssistant
+      .slice(startIdx)
       .map((m) => ({ role: m.event_type as 'user' | 'assistant', content: m.payload ?? '' }));
   }
 
