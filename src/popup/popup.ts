@@ -1,6 +1,7 @@
 import type { AuthState, ChatMessage, Task } from '../types';
 import { renderMarkdown } from '../utils/markdown';
 import { BUILT_IN_TEMPLATES, fillTemplate } from '../utils/prompt-templates';
+import './popup.css';
 
 // ── State ──────────────────────────────────────────────────────────────────
 let authState: AuthState = { isAuthenticated: false };

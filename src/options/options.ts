@@ -1,5 +1,6 @@
 import type { ExtensionSettings } from '../types';
 import { DEFAULT_SETTINGS } from '../types';
+import './options.css';
 
 const form = document.getElementById('settings-form') as HTMLFormElement;
 const saveStatus = document.getElementById('save-status') as HTMLSpanElement;
