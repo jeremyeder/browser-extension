@@ -402,6 +402,72 @@ function showLoginError(message: string): void {
 
 // ─── Chat view init ───────────────────────────────────────────────────────────
 
+function showBootScreen(message: string): void {
+  showView('chat');
+  messagesEl.innerHTML = '';
+  const bootEl = document.createElement('div');
+  bootEl.className = 'boot-screen';
+  bootEl.innerHTML = `
+    <div class="boot-spinner"></div>
+    <p class="boot-message">${message}</p>
+  `;
+  messagesEl.appendChild(bootEl);
+}
+
+function clearBootScreen(): void {
+  const boot = messagesEl.querySelector('.boot-screen');
+  if (boot) boot.remove();
+}
+
+async function ensureSession(client: ACPClient): Promise<string> {
+  if (!state.agent) throw new Error('No enterprise agent');
+
+  const agentId = state.agent.id;
+  const projectId = state.agent.projectId ?? 'enterprise-assistant';
+
+  // Try to find an existing active session
+  const session = await client.findOrCreateSession(agentId, projectId);
+  const phase = session.phase ?? (session as any).status ?? '';
+
+  if (phase === 'Running') {
+    return session.id;
+  }
+
+  if (phase === 'Failed' || phase === 'Stopped' || phase === 'Completed') {
+    // Dead session — create a new one to pick up where we left off
+    showBootScreen('Restarting your assistant session...');
+    const newSession = await client.createNewSession(agentId, projectId);
+    return await waitForSessionReady(newSession.id, client);
+  }
+
+  // Pending/Creating — wait for it
+  showBootScreen('Starting your Enterprise Assistant. This takes 1–2 minutes for new users...');
+  return await waitForSessionReady(session.id, client);
+}
+
+async function waitForSessionReady(sessionId: string, client: ACPClient): Promise<string> {
+  const deadline = Date.now() + 300_000;
+  while (Date.now() < deadline) {
+    try {
+      const s = await client.getSession(sessionId);
+      const phase = s.phase ?? (s as any).status ?? '';
+      if (phase === 'Running') {
+        clearBootScreen();
+        return sessionId;
+      }
+      if (phase === 'Failed') {
+        clearBootScreen();
+        throw new Error('Session failed to start. Try again.');
+      }
+    } catch (e) {
+      if ((e as Error).message?.includes('failed')) throw e;
+    }
+    await sleep(3000);
+  }
+  clearBootScreen();
+  throw new Error('Session took too long to start.');
+}
+
 async function initChatView(): Promise<void> {
   try {
     const tokens = await ensureFreshToken();
@@ -413,28 +479,27 @@ async function initChatView(): Promise<void> {
       state.agent = agent;
       el('agent-name').textContent = agent.name;
     } catch {
-      // No agent found — show onboarding wizard
       showView('onboarding');
       return;
     }
 
-    // Restore previous session if any
-    const savedSessionId = await StorageManager.getCurrentSessionId();
-    if (savedSessionId) {
-      state.sessionId = savedSessionId;
-      try {
-        const messages = await client.getMessages(savedSessionId);
-        renderMessages(messages);
-      } catch {
-        // Session may be expired — start fresh
-        state.sessionId = null;
-        await StorageManager.setCurrentSessionId(null);
-      }
-    }
-
     showView('chat');
+
+    // Find or start a session
+    showBootScreen('Connecting to your Enterprise Assistant...');
+    const sessionId = await ensureSession(client);
+    state.sessionId = sessionId;
+    await StorageManager.setCurrentSessionId(sessionId);
+
+    // Load conversation history
+    clearBootScreen();
+    try {
+      const messages = await client.getMessages(sessionId);
+      renderMessages(messages);
+    } catch {
+      // Fresh session, no messages yet
+    }
   } catch (err) {
-    // If init fails because tokens are invalid, fall back to login
     console.error('Chat init failed:', err);
     await StorageManager.clearTokens();
     state.tokens = null;

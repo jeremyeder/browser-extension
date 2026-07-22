@@ -47,19 +47,27 @@ export class ACPClient {
   }
 
   async findOrCreateSession(agentId: string, projectId: string): Promise<Session> {
-    // Reuse existing running session for this agent
     const data = await this.request<{ items: Session[] }>('/api/ambient/v1/sessions');
-    const existing = data.items?.find(
-      (s) => s.agent_id === agentId && (s.phase === 'Running' || s.phase === 'Creating' || s.phase === 'Pending')
+    const active = data.items?.find(
+      (s) => s.agent_id === agentId &&
+        (s.phase === 'Running' || s.phase === 'Creating' || s.phase === 'Pending')
     );
-    if (existing) return existing;
+    if (active) return active;
 
+    // Return any session for this agent (even dead ones for phase detection)
+    const any = data.items?.find((s) => s.agent_id === agentId);
+    if (any) return any;
+
+    return this.createNewSession(agentId, projectId);
+  }
+
+  async createNewSession(agentId: string, projectId: string): Promise<Session> {
     return this.request<Session>('/api/ambient/v1/sessions', {
       method: 'POST',
       body: JSON.stringify({
         agent_id: agentId,
         project_id: projectId,
-        name: `browser-${Date.now()}`,
+        name: `ea-${Date.now()}`,
         prompt: 'Enterprise Assistant session',
       }),
     });
