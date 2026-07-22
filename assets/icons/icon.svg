@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <rect width="128" height="128" rx="24" fill="#2563eb"/>
+  <!-- Brain/circuit icon representing AI assistant -->
+  <circle cx="64" cy="48" r="20" fill="none" stroke="white" stroke-width="4"/>
+  <line x1="64" y1="28" x2="64" y2="16" stroke="white" stroke-width="4" stroke-linecap="round"/>
+  <line x1="44" y1="68" x2="38" y2="80" stroke="white" stroke-width="4" stroke-linecap="round"/>
+  <line x1="84" y1="68" x2="90" y2="80" stroke="white" stroke-width="4" stroke-linecap="round"/>
+  <!-- Chat bubble -->
+  <rect x="30" y="80" width="68" height="36" rx="8" fill="white" opacity="0.9"/>
+  <line x1="40" y1="92" x2="88" y2="92" stroke="#2563eb" stroke-width="3" stroke-linecap="round"/>
+  <line x1="40" y1="104" x2="72" y2="104" stroke="#2563eb" stroke-width="3" stroke-linecap="round"/>
+</svg>
