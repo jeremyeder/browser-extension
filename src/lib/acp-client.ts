@@ -46,17 +46,29 @@ export class ACPClient {
     }
   }
 
+  private static readonly EA_ANNOTATION = 'ambient-code.io/enterprise-agent';
+
   async findOrCreateSession(agentId: string, projectId: string): Promise<Session> {
     const data = await this.request<{ items: Session[] }>('/api/ambient/v1/sessions');
-    const active = data.items?.find(
+
+    // Find by enterprise-agent annotation first
+    const annotated = data.items?.find((s) => {
+      const ann = typeof s.annotations === 'string' ? s.annotations : '';
+      return ann.includes(ACPClient.EA_ANNOTATION);
+    });
+
+    if (annotated) {
+      const phase = annotated.phase ?? '';
+      if (phase === 'Running' || phase === 'Creating' || phase === 'Pending') return annotated;
+      // Dead annotated session — will create a new one below
+    }
+
+    // Fallback: find by agent_id
+    const byAgent = data.items?.find(
       (s) => s.agent_id === agentId &&
         (s.phase === 'Running' || s.phase === 'Creating' || s.phase === 'Pending')
     );
-    if (active) return active;
-
-    // Return any session for this agent (even dead ones for phase detection)
-    const any = data.items?.find((s) => s.agent_id === agentId);
-    if (any) return any;
+    if (byAgent) return byAgent;
 
     return this.createNewSession(agentId, projectId);
   }
@@ -69,6 +81,7 @@ export class ACPClient {
         project_id: projectId,
         name: `ea-${Date.now()}`,
         prompt: 'Enterprise Assistant session',
+        annotations: JSON.stringify({ [ACPClient.EA_ANNOTATION]: 'true' }),
       }),
     });
   }

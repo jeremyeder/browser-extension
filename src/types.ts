@@ -24,6 +24,7 @@ export interface Session {
   phase?: string;
   agent_id?: string;
   project_id?: string;
+  annotations?: string;
   createdAt: string;
   agentId?: string;
 }

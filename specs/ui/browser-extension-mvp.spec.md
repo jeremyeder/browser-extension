@@ -108,9 +108,12 @@ polls for up to 5 minutes. The typing indicator stays visible during this time.
 
 **Subsequent messages**: Respond in seconds (session already Running).
 
-### Session Discovery via Annotations (future)
-Sessions annotated with `ambient-code.io/enterprise-agent: true` enable
-multi-client discovery (browser, CLI, UI find the same session).
+### Session Discovery via Annotations
+Sessions are created with annotation `ambient-code.io/enterprise-agent: true`.
+Discovery checks annotations first, then falls back to agent_id matching.
+This enables multi-client discovery — browser, CLI, and web UI all find
+the same persistent session via the annotation. The annotation is a JSON
+string in the session's `annotations` field.
 
 ## ACP Message API
 
