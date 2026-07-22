@@ -337,3 +337,12 @@ For demo purposes, verify visually:
 - [ ] Dark theme colors are readable (contrast ratio)
 - [ ] Markdown renders correctly (bold, lists, code blocks, links)
 - [ ] Extension icon is visible in toolbar
+
+### Toolbar Pinning
+Chrome does not expose an API for auto-pinning extensions to the toolbar.
+The extension SHALL use `setPanelBehavior({ openPanelOnActionClick: true })`
+so clicking the extension icon (even from the puzzle-piece menu) opens the
+side panel directly without requiring pinning. The onboarding wizard or
+first-run experience SHOULD include a visual instruction telling the user
+to pin the extension: "Click the puzzle piece icon → find Enterprise
+Assistant → click the pin icon."
