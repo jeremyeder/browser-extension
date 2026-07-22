@@ -495,14 +495,19 @@ async function initChatView(): Promise<void> {
     state.sessionId = sessionId;
     await StorageManager.setCurrentSessionId(sessionId);
 
-    // Load conversation history
-    clearBootScreen();
-    try {
-      const messages = await client.getMessages(sessionId);
-      renderMessages(messages);
-    } catch {
-      // Fresh session, no messages yet
+    // Wait for Artoo's first greeting before showing chat
+    showBootScreen('Artoo is getting ready...');
+    let greeting: ApiMessage[] = [];
+    const greetDeadline = Date.now() + 120_000;
+    while (Date.now() < greetDeadline) {
+      try {
+        greeting = await client.getMessages(sessionId);
+        if (greeting.some((m) => m.role === 'assistant')) break;
+      } catch { /* keep polling */ }
+      await sleep(2000);
     }
+    clearBootScreen();
+    if (greeting.length > 0) renderMessages(greeting);
   } catch (err) {
     console.error('Chat init failed:', err);
     await StorageManager.clearTokens();
