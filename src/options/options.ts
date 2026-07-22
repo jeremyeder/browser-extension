@@ -4,13 +4,24 @@ import './options.css';
 
 const form = document.getElementById('settings-form') as HTMLFormElement;
 const saveStatus = document.getElementById('save-status') as HTMLSpanElement;
-const customSsoFields = document.getElementById('custom-sso-fields') as HTMLDivElement;
-const oktaDomainField = document.getElementById('okta-domain-field') as HTMLDivElement;
-const ssoProviderSelect = document.getElementById('sso-provider') as HTMLSelectElement;
+const themeSelect = document.getElementById('theme') as HTMLSelectElement;
+
+function applyTheme(theme: string) {
+  if (theme === 'system') {
+    document.documentElement.removeAttribute('data-theme');
+  } else {
+    document.documentElement.setAttribute('data-theme', theme);
+  }
+}
+
+themeSelect.addEventListener('change', () => {
+  applyTheme(themeSelect.value);
+});
 
 async function loadSettings() {
   const settings = await sendMessage<ExtensionSettings>({ type: 'SETTINGS_GET' });
   populateForm(settings);
+  applyTheme(settings.theme);
 }
 
 function populateForm(settings: ExtensionSettings) {
@@ -29,16 +40,6 @@ function populateForm(settings: ExtensionSettings) {
   setCheckbox('enable-auto-summarize', settings.enableAutoSummarize);
   setCheckbox('notifications-enabled', settings.notificationsEnabled);
   setInput('theme', settings.theme);
-  toggleProviderFields(settings.ssoProvider);
-}
-
-ssoProviderSelect.addEventListener('change', () => {
-  toggleProviderFields(ssoProviderSelect.value);
-});
-
-function toggleProviderFields(provider: string) {
-  customSsoFields.classList.toggle('hidden', provider !== 'custom');
-  oktaDomainField.classList.toggle('hidden', provider !== 'okta');
 }
 
 form.addEventListener('submit', async (e) => {
