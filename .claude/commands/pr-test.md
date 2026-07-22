@@ -1,0 +1,1 @@
+../../skills/test/pr-test/SKILL.md

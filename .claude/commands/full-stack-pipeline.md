@@ -1,0 +1,1 @@
+../../skills/build/full-stack-pipeline/SKILL.md
