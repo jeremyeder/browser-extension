@@ -71,6 +71,7 @@ function readForm(): ExtensionSettings {
     ssoProvider: getInput('sso-provider') as ExtensionSettings['ssoProvider'],
     ssoClientId: getInput('sso-client-id'),
     ssoOktaDomain: getInput('sso-okta-domain'),
+    ssoKeycloakIssuer: getInput('sso-keycloak-issuer'),
     ssoAuthUrl: getInput('sso-auth-url') || undefined,
     ssoTokenUrl: getInput('sso-token-url') || undefined,
     enablePageContext: getCheckbox('enable-page-context'),
