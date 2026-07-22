@@ -431,3 +431,10 @@ OpenShell gateway sandboxes don't expose pod services. The SSE proxy needs
 to route through the gateway's exec/events API instead of direct pod access.
 Until fixed, the browser extension falls back to REST polling.
 Tracked: https://github.com/openshift-online/agent-control-plane/issues/422
+
+### Input Area Details
+- Textarea: 2 rows default, monospace font (`var(--font-mono)`), vertically resizable
+- Max height: 200px
+- Prompt history: up/down arrow scrolls through previously sent prompts
+  (up at cursor position 0 = previous, down = next, past end = empty)
+- Enter sends, Shift+Enter for newline

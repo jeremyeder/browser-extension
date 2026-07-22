@@ -112,14 +112,13 @@ function showTyping(visible: boolean): void {
 
 function renderMessages(messages: ApiMessage[]): void {
   messagesEl.innerHTML = '';
-  for (const msg of messages) {
-    if (msg.role === 'user') {
-      appendUserMessage(msg.content);
-    } else {
-      appendAssistantMessage(msg.content);
-    }
-  }
+  messages.forEach((msg) => {
+    if (msg.role === 'user') appendUserMessage(msg.content);
+    else appendAssistantMessage(msg.content);
+  });
 }
+// Used by boot flow when reconnecting to existing session
+void renderMessages;
 
 // ─── Page context ─────────────────────────────────────────────────────────────
 
@@ -171,9 +170,16 @@ el('btn-remove-context').addEventListener('click', () => {
 const inputEl = el<HTMLTextAreaElement>('message-input');
 const sendBtn = el<HTMLButtonElement>('btn-send');
 
+// Prompt history — up/down arrow scrolls through previous prompts
+const promptHistory: string[] = [];
+let historyIdx = -1;
+
 async function sendMessage(): Promise<void> {
   const raw = inputEl.value.trim();
   if (!raw) return;
+
+  promptHistory.push(raw);
+  historyIdx = promptHistory.length;
 
   inputEl.value = '';
   inputEl.style.height = 'auto';
@@ -355,6 +361,23 @@ inputEl.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
     void sendMessage();
+  }
+  // Up arrow at start of input: scroll through prompt history
+  if (e.key === 'ArrowUp' && inputEl.selectionStart === 0 && promptHistory.length > 0) {
+    e.preventDefault();
+    if (historyIdx > 0) historyIdx--;
+    inputEl.value = promptHistory[historyIdx] ?? '';
+  }
+  // Down arrow: forward in history
+  if (e.key === 'ArrowDown' && promptHistory.length > 0) {
+    e.preventDefault();
+    if (historyIdx < promptHistory.length - 1) {
+      historyIdx++;
+      inputEl.value = promptHistory[historyIdx] ?? '';
+    } else {
+      historyIdx = promptHistory.length;
+      inputEl.value = '';
+    }
   }
 });
 

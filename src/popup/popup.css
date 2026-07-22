@@ -420,11 +420,14 @@ select {
 
 .message-input {
   flex: 1;
-  resize: none;
+  resize: vertical;
   border-radius: var(--radius);
-  max-height: 120px;
+  min-height: 42px;
+  max-height: 200px;
   overflow-y: auto;
   line-height: 1.45;
+  font-family: var(--font-mono);
+  font-size: 12px;
 }
 
 .btn-send {
