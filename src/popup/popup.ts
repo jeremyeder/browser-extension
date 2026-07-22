@@ -227,12 +227,10 @@ async function sendMessage(): Promise<void> {
       await StorageManager.setCurrentSessionId(sessionId);
     }
 
-    // Connect to AG-UI stream FIRST, then send the message
-    // so we catch the response as it starts
-    const streamPromise = streamReply(sessionId);
-    await sleep(200); // let EventSource connect
     await client.sendMessage(sessionId, content);
-    await streamPromise;
+
+    // Poll for reply (SSE streaming disabled until gateway mode supports it)
+    await fallbackPoll(sessionId);
   } catch (err) {
     appendErrorMessage(err instanceof Error ? err.message : 'Failed to send message');
   } finally {
@@ -241,7 +239,9 @@ async function sendMessage(): Promise<void> {
   }
 }
 
-async function streamReply(sessionId: string): Promise<void> {
+// SSE streaming — disabled until OpenShell gateway mode supports event proxying
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+async function _streamReply(sessionId: string): Promise<void> {
   const tokens = await ensureFreshToken();
   const eventsUrl = `${state.settings.acpServerUrl}/api/ambient/v1/sessions/${sessionId}/agui/events`;
 
@@ -323,7 +323,8 @@ async function streamReply(sessionId: string): Promise<void> {
           }
         }
       } catch {
-        // SSE failed — fall back to polling
+        // SSE failed — fall back to polling with spinner
+        showTyping(true);
         await fallbackPoll(sessionId);
       }
       done();
@@ -333,6 +334,8 @@ async function streamReply(sessionId: string): Promise<void> {
     setTimeout(() => done(), 300_000);
   });
 }
+
+void _streamReply; // retained for SSE re-enablement
 
 async function fallbackPoll(sessionId: string): Promise<void> {
   const tokens = await ensureFreshToken();
