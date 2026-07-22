@@ -88,28 +88,28 @@ export class ACPClient {
       `/api/ambient/v1/sessions/${sessionId}/messages`
     );
     const items = Array.isArray(data) ? data : (data.items ?? []);
-    const visible = items.filter((m) => {
-      if (m.event_type !== 'user' && m.event_type !== 'assistant') return false;
-      const text = (m.payload ?? '').toLowerCase();
-      // Skip bootstrap: system prompts, agent instructions, internal monologue
-      if (m.event_type === 'user' && (
-        text.includes('directives:') ||
-        text.includes('you are artoo') ||
-        text.includes('you are an enterprise assistant') ||
-        text.includes('enterprise assistant session') ||
-        text.includes('interaction style:') ||
-        text.length > 500 // bootstrap prompts are very long
-      )) return false;
-      if (m.event_type === 'assistant' && (
-        text.includes('check my memory') ||
-        text.includes('no prior memory found') ||
-        text.includes('let me read') ||
-        text.includes('let me check')
-      )) return false;
-      return true;
-    });
+    const userAndAssistant = items.filter(
+      (m) => m.event_type === 'user' || m.event_type === 'assistant'
+    );
 
-    return visible.map((m) => ({
+    // The first messages in a session are ACP bootstrap (system prompt injected
+    // as event_type:"user"). Skip everything before the LAST assistant message
+    // that precedes the first real user interaction. This works because the
+    // bootstrap sequence is: [user:system-prompt, user:agent-instructions,
+    // assistant:greeting] — we want to start from the greeting.
+    let lastBootstrapAssistantIdx = -1;
+    for (let i = 0; i < userAndAssistant.length; i++) {
+      if (userAndAssistant[i].event_type === 'assistant') {
+        lastBootstrapAssistantIdx = i;
+      }
+      // Once we see a user message AFTER an assistant message, the bootstrap is over
+      if (i > 0 && userAndAssistant[i].event_type === 'user' && lastBootstrapAssistantIdx >= 0) {
+        break;
+      }
+    }
+
+    const startIdx = Math.max(0, lastBootstrapAssistantIdx);
+    return userAndAssistant.slice(startIdx).map((m) => ({
       role: m.event_type as 'user' | 'assistant',
       content: m.payload ?? '',
     }));
