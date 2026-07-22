@@ -2,7 +2,7 @@ import type { Message, AuthState, ExtensionSettings, Task, ChatMessage } from '.
 import { DEFAULT_SETTINGS } from '../types';
 import { AuthManager } from './auth-manager';
 import { StorageManager } from './storage-manager';
-import type { ChatSession } from './storage-manager';
+
 import { AssistantClient } from './assistant-client';
 
 // Side-effect imports — registers listeners that must be active from service-worker startup
