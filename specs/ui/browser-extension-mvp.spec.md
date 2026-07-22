@@ -110,6 +110,12 @@ provisioning, polling session phase every 3 seconds for up to 5 minutes.
 
 **Subsequent messages**: Respond in seconds (session already Running).
 
+**Reconnect behavior**: On extension reload or browser restart, the extension
+checks for an existing active session (by annotation, then by agent_id).
+If found and Running, it loads the previous conversation history. If no
+active session exists, it shows the static Artoo greeting and boots a
+new session in the background.
+
 ### Session Discovery via Annotations
 Sessions are created with annotation `ambient-code.io/enterprise-agent: true`.
 Discovery checks annotations first, then falls back to agent_id matching.
@@ -434,7 +440,10 @@ Tracked: https://github.com/openshift-online/agent-control-plane/issues/422
 
 ### Input Area Details
 - Textarea: 2 rows default, monospace font (`var(--font-mono)`), vertically resizable
-- Max height: 200px
+- Min height: 42px, max height: 200px
 - Prompt history: up/down arrow scrolls through previously sent prompts
   (up at cursor position 0 = previous, down = next, past end = empty)
+- History cleared on sign-out (no cross-user leakage)
 - Enter sends, Shift+Enter for newline
+- Build gate: webpack `clean: true` deletes dist on every build — TS errors
+  block output entirely (no stale dist served)
