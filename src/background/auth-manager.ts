@@ -146,9 +146,20 @@ export class AuthManager {
   }
 
   private resolveKeycloakIssuer(settings: ExtensionSettings): string {
-    const issuer = settings.ssoKeycloakIssuer?.trim();
-    if (!issuer) throw new Error('Keycloak issuer URL must be configured (ssoKeycloakIssuer)');
-    return issuer.replace(/\/$/, '');
+    const explicit = settings.ssoKeycloakIssuer?.trim();
+    if (explicit) return explicit.replace(/\/$/, '');
+
+    const apiUrl = settings.apiEndpoint?.trim();
+    if (!apiUrl) throw new Error('ACP Server URL must be configured in Settings');
+
+    try {
+      const url = new URL(apiUrl);
+      const host = url.hostname;
+      const base = host.replace(/^ambient-api-server-/, 'keycloak-');
+      return `${url.protocol}//${base}/realms/ambient-code`;
+    } catch {
+      throw new Error('Invalid ACP Server URL — cannot derive Keycloak issuer');
+    }
   }
 
   /** Okta uses a subdomain (e.g. "mycompany") separate from the OAuth client_id. */
