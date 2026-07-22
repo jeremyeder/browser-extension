@@ -229,7 +229,7 @@ async function sendMessage(): Promise<void> {
 async function waitForReply(
   sessionId: string,
   client: ACPClient,
-  timeoutMs = 60_000,
+  timeoutMs = 300_000,
   pollIntervalMs = 1500
 ): Promise<string | null> {
   const deadline = Date.now() + timeoutMs;
