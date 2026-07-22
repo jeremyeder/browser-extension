@@ -407,10 +407,14 @@ async function initChatView(): Promise<void> {
     const tokens = await ensureFreshToken();
     const client = makeClient(tokens);
 
-    // Discover enterprise agent
-    const agent = await client.getEnterpriseAgent();
-    state.agent = agent;
-    el('agent-name').textContent = agent.name;
+    // Discover enterprise agent (optional — API may not be deployed yet)
+    try {
+      const agent = await client.getEnterpriseAgent();
+      state.agent = agent;
+      el('agent-name').textContent = agent.name;
+    } catch {
+      el('agent-name').textContent = 'Enterprise Assistant';
+    }
 
     // Restore previous session if any
     const savedSessionId = await StorageManager.getCurrentSessionId();
