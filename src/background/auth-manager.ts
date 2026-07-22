@@ -32,6 +32,10 @@ export class AuthManager {
     const authUrl = await this.buildAuthUrl(settings);
     const redirectUrl = chrome.identity.getRedirectURL('oauth2');
 
+    console.log('[AUTH] Auth URL:', authUrl);
+    console.log('[AUTH] Redirect URL:', redirectUrl);
+    console.log('[AUTH] Settings:', JSON.stringify({ ssoProvider: settings.ssoProvider, ssoClientId: settings.ssoClientId, apiEndpoint: settings.apiEndpoint, ssoKeycloakIssuer: settings.ssoKeycloakIssuer }));
+
     const responseUrl = await chrome.identity.launchWebAuthFlow({
       url: authUrl,
       interactive: true,
