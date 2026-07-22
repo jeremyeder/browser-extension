@@ -112,7 +112,7 @@ export interface ExtensionSettings {
 }
 
 export const DEFAULT_SETTINGS: ExtensionSettings = {
-  apiEndpoint: 'https://api.anthropic.com',
+  apiEndpoint: '',
   proxyEndpoint: '',
   anthropicApiKey: '',
   modelId: 'claude-sonnet-4-6',

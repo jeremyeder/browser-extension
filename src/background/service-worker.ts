@@ -20,11 +20,16 @@ chrome.action.onClicked.addListener(async (tab) => {
   }
 });
 
-// Initialize on install
+// Initialize on install or update
 chrome.runtime.onInstalled.addListener(async (details) => {
   if (details.reason === 'install') {
     await storage.setSettings(DEFAULT_SETTINGS);
     await chrome.sidePanel.setOptions({ enabled: true });
+  } else if (details.reason === 'update') {
+    const current = await storage.getSettings();
+    if (current.ssoProvider !== 'keycloak') {
+      await storage.setSettings({ ...current, ssoProvider: 'keycloak' as const });
+    }
   }
 
   // Always recreate context menu items (also needed on update to reflect any renames)
