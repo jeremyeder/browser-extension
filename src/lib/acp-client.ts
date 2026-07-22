@@ -40,10 +40,15 @@ export class ACPClient {
     }
   }
 
-  async createSession(agentId: string, projectId?: string): Promise<Session> {
+  async createSession(agentId: string, projectId: string): Promise<Session> {
     return this.request<Session>('/api/ambient/v1/sessions', {
       method: 'POST',
-      body: JSON.stringify({ agentId, projectId }),
+      body: JSON.stringify({
+        agent_id: agentId,
+        project_id: projectId,
+        name: `browser-${Date.now()}`,
+        prompt: 'Enterprise Assistant session',
+      }),
     });
   }
 
