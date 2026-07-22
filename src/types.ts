@@ -2,6 +2,7 @@ export interface Settings {
   acpServerUrl: string;
   notifications: boolean;
   theme: 'light' | 'dark' | 'system';
+  onboardingComplete?: boolean;
 }
 
 export interface AuthTokens {

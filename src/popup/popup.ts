@@ -473,20 +473,24 @@ async function initChatView(): Promise<void> {
     const tokens = await ensureFreshToken();
     const client = makeClient(tokens);
 
+    // Check if onboarding needed
+    if (!state.settings.onboardingComplete) {
+      showView('onboarding');
+      return;
+    }
+
     // Discover enterprise agent
     try {
       const agent = await client.getEnterpriseAgent();
       state.agent = agent;
       el('agent-name').textContent = agent.name;
     } catch {
-      showView('onboarding');
-      return;
+      el('agent-name').textContent = 'Enterprise Assistant';
     }
 
-    showView('chat');
-
-    // Find or start a session
+    // Show boot screen immediately (no flash of empty chat)
     showBootScreen('Connecting to your Enterprise Assistant...');
+    showView('chat');
     const sessionId = await ensureSession(client);
     state.sessionId = sessionId;
     await StorageManager.setCurrentSessionId(sessionId);
@@ -523,29 +527,27 @@ document.querySelectorAll('.onboarding-next').forEach((btn) => {
   btn.addEventListener('click', () => showOnboardingStep(onboardingStep + 1));
 });
 
-document.querySelectorAll('.onboarding-skip').forEach((btn) => {
-  btn.addEventListener('click', () => {
-    // Skip: provision Artoo starter and go to chat
-    void (async () => {
-      el('agent-name').textContent = 'Artoo';
-      await initChatView();
-    })();
+async function completeOnboarding(): Promise<void> {
+  const displayName = (document.getElementById('ob-name') as HTMLInputElement)?.value || 'Artoo';
+  await StorageManager.saveSettings({
+    ...state.settings,
+    onboardingComplete: true,
   });
+  el('agent-name').textContent = displayName;
+  await initChatView();
+}
+
+document.querySelectorAll('.onboarding-skip').forEach((btn) => {
+  btn.addEventListener('click', () => void completeOnboarding());
 });
 
-// Policy acknowledgment enables finish button
 const policyAck = document.getElementById('ob-policy-ack') as HTMLInputElement | null;
 const finishBtn = document.querySelector('.onboarding-finish') as HTMLButtonElement | null;
 if (policyAck && finishBtn) {
   policyAck.addEventListener('change', () => {
     finishBtn.disabled = !policyAck.checked;
   });
-  finishBtn.addEventListener('click', () => {
-    // Collect onboarding data and provision
-    const displayName = (document.getElementById('ob-name') as HTMLInputElement)?.value || 'Artoo';
-    el('agent-name').textContent = displayName;
-    void initChatView();
-  });
+  finishBtn.addEventListener('click', () => void completeOnboarding());
 }
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
