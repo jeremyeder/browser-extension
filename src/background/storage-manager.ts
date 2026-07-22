@@ -1,7 +1,7 @@
 import type { Settings, AuthTokens } from '../types';
 
 const DEFAULT_SETTINGS: Settings = {
-  acpServerUrl: '',
+  acpServerUrl: 'https://ambient-api-server-ambient-code.apps.rosa.jeder-prerel.8btk.p3.openshiftapps.com',
   notifications: true,
   theme: 'system',
 };
