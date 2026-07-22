@@ -119,7 +119,7 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   maxTokens: 4096,
   temperature: 0.7,
   ssoProvider: 'keycloak',
-  ssoClientId: 'ambient-browser-extension',
+  ssoClientId: 'acp-browser-extension',
   ssoOktaDomain: '',
   ssoKeycloakIssuer: '',
   enablePageContext: false,
