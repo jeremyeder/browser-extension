@@ -213,11 +213,8 @@ async function sendMessage(): Promise<void> {
 
     await client.sendMessage(sessionId, content);
 
-    // Poll for the assistant reply (simple polling — up to 60s)
-    const reply = await waitForReply(sessionId, client);
-    if (reply) {
-      appendAssistantMessage(reply);
-    }
+    // Stream the reply via SSE
+    await streamReply(sessionId);
   } catch (err) {
     appendErrorMessage(err instanceof Error ? err.message : 'Failed to send message');
   } finally {
@@ -226,40 +223,120 @@ async function sendMessage(): Promise<void> {
   }
 }
 
-async function waitForReply(
-  sessionId: string,
-  client: ACPClient,
-  timeoutMs = 300_000,
-  pollIntervalMs = 1500
-): Promise<string | null> {
-  const deadline = Date.now() + timeoutMs;
+async function streamReply(sessionId: string): Promise<void> {
+  const tokens = await ensureFreshToken();
+  const eventsUrl = `${state.settings.acpServerUrl}/api/ambient/v1/sessions/${sessionId}/agui/events`;
 
-  // Snapshot the message count right after sending, so we only watch for truly new messages
+  return new Promise<void>((resolve) => {
+    let replyDiv: HTMLDivElement | null = null;
+    let replyText = '';
+    let resolved = false;
+
+    const done = () => {
+      if (resolved) return;
+      resolved = true;
+      showTyping(false);
+      // Re-render final markdown
+      if (replyDiv && replyText) {
+        replyDiv.innerHTML = renderMarkdown(replyText);
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      }
+      resolve();
+    };
+
+    // Use fetch + ReadableStream since EventSource doesn't support auth headers
+    void (async () => {
+      try {
+        const resp = await fetch(eventsUrl, {
+          headers: {
+            'Authorization': `Bearer ${tokens.accessToken}`,
+            'Accept': 'text/event-stream',
+          },
+        });
+
+        if (!resp.ok || !resp.body) {
+          // Fallback to polling if SSE unavailable
+          await fallbackPoll(sessionId);
+          done();
+          return;
+        }
+
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const { done: streamDone, value } = await reader.read();
+          if (streamDone) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() ?? '';
+
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            try {
+              const event = JSON.parse(line.slice(6));
+              const type = event.type ?? event.event_type ?? '';
+
+              if (type === 'TEXT_MESSAGE_CONTENT' || type === 'text_message_content') {
+                const delta = event.delta ?? event.payload ?? event.text ?? '';
+                if (delta) {
+                  if (!replyDiv) {
+                    showTyping(false);
+                    replyDiv = document.createElement('div');
+                    replyDiv.className = 'message message-assistant';
+                    messagesEl.appendChild(replyDiv);
+                  }
+                  replyText += delta;
+                  replyDiv.textContent = replyText;
+                  messagesEl.scrollTop = messagesEl.scrollHeight;
+                }
+              } else if (type === 'TEXT_MESSAGE_END' || type === 'text_message_end') {
+                done();
+                reader.cancel();
+                return;
+              } else if (type === 'RUN_FINISHED' || type === 'run_finished') {
+                done();
+                reader.cancel();
+                return;
+              }
+            } catch { /* skip unparseable lines */ }
+          }
+        }
+      } catch {
+        // SSE failed — fall back to polling
+        await fallbackPoll(sessionId);
+      }
+      done();
+    })();
+
+    // Timeout after 5 minutes
+    setTimeout(() => done(), 300_000);
+  });
+}
+
+async function fallbackPoll(sessionId: string): Promise<void> {
+  const tokens = await ensureFreshToken();
+  const client = makeClient(tokens);
+  const deadline = Date.now() + 300_000;
   let baseline = 0;
-  try {
-    const msgs = await client.getMessages(sessionId);
-    baseline = msgs.length;
-  } catch {
-    baseline = 0;
-  }
+  try { baseline = (await client.getMessages(sessionId)).length; } catch {}
 
   while (Date.now() < deadline) {
-    await sleep(pollIntervalMs);
+    await sleep(1500);
     try {
       const msgs = await client.getMessages(sessionId);
       if (msgs.length > baseline) {
-        const newMsgs = msgs.slice(baseline);
-        const assistantMsg = [...newMsgs].reverse().find((m) => m.role === 'assistant');
-        if (assistantMsg) return assistantMsg.content;
-        // User message appeared but no assistant reply yet — update baseline
+        const assistantMsg = [...msgs.slice(baseline)].reverse().find((m) => m.role === 'assistant');
+        if (assistantMsg) {
+          appendAssistantMessage(assistantMsg.content);
+          return;
+        }
         baseline = msgs.length;
       }
-    } catch {
-      // continue polling
-    }
+    } catch {}
   }
-
-  return null;
 }
 
 function sleep(ms: number): Promise<void> {
