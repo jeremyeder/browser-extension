@@ -158,18 +158,25 @@ When no Enterprise Agent exists, show the onboarding wizard from
 ### Skip (Artoo Starter)
 Provisions the default Artoo template immediately without customization or memory.
 
-### First Conversation
-Artoo sends first:
-> Hi! I'm {display_name}, your Enterprise Assistant. I'm here to help you
-> with your work. {memory_status_text}
->
-> To get started, I'd love to learn a bit about you. What are you currently
-> working on?
+### First Conversation (Instant Greeting)
+The greeting is rendered immediately from a static template — no waiting
+for the session to boot. The session provisions in the background while
+the user reads the greeting and types their first message.
 
-Follow-up prompts after user responds:
-- What tools, languages, or frameworks do you use most?
-- Are there any workflows or conventions you'd like me to follow?
-- Is there anything you'd like me to always do (or never do)?
+Artoo's greeting:
+> Hi! I'm **Artoo**, your new Enterprise Assistant. I can help with:
+> - **Manage sessions** — start, monitor, and review agentic coding sessions
+> - **Orchestrate agents** — coordinate agent teams across projects
+> - **Schedule work** — set up recurring tasks and automated workflows
+> - **Choose models** — pick the right model for each task
+> - **Write emails & calendar** — draft messages, schedule meetings, manage your day
+> - **Connect to your tools** — Jira, GitHub, GitLab, Google Workspace, and more
+>
+> Over time I'll learn how you work and become your second brain.
+> What would you like to start with?
+
+The boot screen shows "Looking for Artoo..." only when reconnecting to
+an existing session (not on first use where the greeting is immediate).
 
 ## Chat View
 
