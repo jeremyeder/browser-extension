@@ -492,11 +492,14 @@ async function initChatView(): Promise<void> {
     showView('chat');
     messagesEl.innerHTML = '';
     appendAssistantMessage(
-      "Hey there! I'm **Artoo**, your ACP Enterprise Assistant. I'm here to help with:\n\n" +
-      "- **Agent Control Plane** — configuration, deployments, agent management\n" +
-      "- **Kubernetes** — workloads, networking, troubleshooting\n" +
-      "- **Engineering tasks** — architecture, code, infrastructure questions\n\n" +
-      "What can I help you with today?"
+      "Hi! I'm **Artoo**, your new Enterprise Assistant. I can help with:\n\n" +
+      "- **Manage sessions** — start, monitor, and review agentic coding sessions\n" +
+      "- **Orchestrate agents** — coordinate agent teams across projects\n" +
+      "- **Schedule work** — set up recurring tasks and automated workflows\n" +
+      "- **Choose models** — pick the right model for each task\n" +
+      "- **Write emails & calendar** — draft messages, schedule meetings, manage your day\n" +
+      "- **Connect to your tools** — Jira, GitHub, GitLab, Google Workspace, and more\n\n" +
+      "Over time I'll learn how you work and become your second brain. What would you like to start with?"
     );
 
     // Boot session in background — ready by the time user finishes typing
