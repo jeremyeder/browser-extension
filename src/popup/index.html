@@ -111,6 +111,90 @@
       </footer>
     </div>
 
+    <!-- Onboarding View -->
+    <div id="view-onboarding" class="view hidden">
+      <div class="onboarding">
+        <!-- Step indicators -->
+        <div class="onboarding-progress">
+          <span class="step-dot active" data-step="0"></span>
+          <span class="step-dot" data-step="1"></span>
+          <span class="step-dot" data-step="2"></span>
+          <span class="step-dot" data-step="3"></span>
+        </div>
+
+        <!-- Step 0: Welcome -->
+        <div class="onboarding-step active" data-step="0">
+          <h2>Assemble Your Enterprise Assistant</h2>
+          <p class="onboarding-desc">Customize how your Enterprise Assistant works, configure agentic memory, and review your organization's security policies.</p>
+          <button class="btn btn-primary onboarding-next">Start</button>
+          <button class="btn btn-ghost onboarding-skip">Skip for now</button>
+        </div>
+
+        <!-- Step 1: Persona -->
+        <div class="onboarding-step" data-step="1">
+          <h2>Name &amp; Persona</h2>
+          <div class="field">
+            <label for="ob-name">What should your assistant be called?</label>
+            <input id="ob-name" type="text" value="Artoo" maxlength="32" class="input">
+          </div>
+          <div class="field">
+            <label for="ob-instructions">Anything else Artoo should know about how you work?</label>
+            <textarea id="ob-instructions" maxlength="2000" rows="3" class="input" placeholder="Optional"></textarea>
+          </div>
+          <div class="field">
+            <label>Warmth</label>
+            <div class="slider-row"><span>Clinical</span><input id="ob-empathy" type="range" min="1" max="5" value="4"><span>Friendly</span></div>
+          </div>
+          <div class="field">
+            <label>Certainty</label>
+            <div class="slider-row"><span>Trusting</span><input id="ob-skepticism" type="range" min="1" max="5" value="2"><span>Skeptical</span></div>
+          </div>
+          <div class="field">
+            <label>Interpretation</label>
+            <div class="slider-row"><span>Flexible</span><input id="ob-literalism" type="range" min="1" max="5" value="2"><span>Literal</span></div>
+          </div>
+          <button class="btn btn-primary onboarding-next">Next</button>
+        </div>
+
+        <!-- Step 2: Memory -->
+        <div class="onboarding-step" data-step="2">
+          <h2>Memory Preferences</h2>
+          <div class="field field-row">
+            <div>
+              <label>Enable cross-session memory</label>
+              <p class="hint">Your assistant can retain context about decisions, preferences, and prior work across sessions.</p>
+            </div>
+            <input id="ob-personal-memory" type="checkbox" checked>
+          </div>
+          <div class="field field-row">
+            <div>
+              <label>Enable coding memory</label>
+              <p class="hint">Your assistant can retain project architecture, coding patterns, and technical decisions.</p>
+            </div>
+            <input id="ob-coding-memory" type="checkbox" checked>
+          </div>
+          <button class="btn btn-primary onboarding-next">Next</button>
+        </div>
+
+        <!-- Step 3: Security Policies -->
+        <div class="onboarding-step" data-step="3">
+          <h2>Security Policies</h2>
+          <p class="onboarding-desc">Your Enterprise Assistant enforces these organizational security policies. These cannot be disabled.</p>
+          <ul class="policy-list">
+            <li>Credentials, API keys, and tokens are protected by platform policy</li>
+            <li>Personally identifiable information is redacted in outputs</li>
+            <li>Dependencies are checked for known vulnerabilities</li>
+            <li>Infrastructure details are abstracted in responses</li>
+          </ul>
+          <div class="field field-row">
+            <label for="ob-policy-ack">I understand my assistant follows these policies</label>
+            <input id="ob-policy-ack" type="checkbox">
+          </div>
+          <button class="btn btn-primary onboarding-finish" disabled>Finish</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Settings View -->
     <div id="view-settings" class="view hidden">
       <header class="panel-header">

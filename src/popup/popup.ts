@@ -35,10 +35,10 @@ function el<T extends HTMLElement>(id: string): T {
 
 // ─── Views ────────────────────────────────────────────────────────────────────
 
-type ViewName = 'login' | 'chat' | 'settings';
+type ViewName = 'login' | 'chat' | 'settings' | 'onboarding';
 
 function showView(name: ViewName): void {
-  (['login', 'chat', 'settings'] as const).forEach((v) => {
+  (['login', 'chat', 'settings', 'onboarding'] as const).forEach((v) => {
     el(`view-${v}`).classList.toggle('hidden', v !== name);
   });
 }
@@ -407,13 +407,15 @@ async function initChatView(): Promise<void> {
     const tokens = await ensureFreshToken();
     const client = makeClient(tokens);
 
-    // Discover enterprise agent (optional — API may not be deployed yet)
+    // Discover enterprise agent
     try {
       const agent = await client.getEnterpriseAgent();
       state.agent = agent;
       el('agent-name').textContent = agent.name;
     } catch {
-      el('agent-name').textContent = 'Enterprise Assistant';
+      // No agent found — show onboarding wizard
+      showView('onboarding');
+      return;
     }
 
     // Restore previous session if any
@@ -438,6 +440,47 @@ async function initChatView(): Promise<void> {
     state.tokens = null;
     showView('login');
   }
+}
+
+// ─── Onboarding Wizard ───────────────────────────────────────────────────────
+
+let onboardingStep = 0;
+const onboardingSteps = document.querySelectorAll('.onboarding-step');
+const stepDots = document.querySelectorAll('.step-dot');
+
+function showOnboardingStep(step: number): void {
+  onboardingStep = step;
+  onboardingSteps.forEach((s, i) => s.classList.toggle('active', i === step));
+  stepDots.forEach((d, i) => d.classList.toggle('active', i === step));
+}
+
+document.querySelectorAll('.onboarding-next').forEach((btn) => {
+  btn.addEventListener('click', () => showOnboardingStep(onboardingStep + 1));
+});
+
+document.querySelectorAll('.onboarding-skip').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    // Skip: provision Artoo starter and go to chat
+    void (async () => {
+      el('agent-name').textContent = 'Artoo';
+      await initChatView();
+    })();
+  });
+});
+
+// Policy acknowledgment enables finish button
+const policyAck = document.getElementById('ob-policy-ack') as HTMLInputElement | null;
+const finishBtn = document.querySelector('.onboarding-finish') as HTMLButtonElement | null;
+if (policyAck && finishBtn) {
+  policyAck.addEventListener('change', () => {
+    finishBtn.disabled = !policyAck.checked;
+  });
+  finishBtn.addEventListener('click', () => {
+    // Collect onboarding data and provision
+    const displayName = (document.getElementById('ob-name') as HTMLInputElement)?.value || 'Artoo';
+    el('agent-name').textContent = displayName;
+    void initChatView();
+  });
 }
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────

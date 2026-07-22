@@ -452,3 +452,87 @@ select {
   background: var(--border);
   border-radius: 4px;
 }
+
+/* ===== Onboarding ===== */
+.onboarding {
+  display: flex;
+  flex-direction: column;
+  padding: 24px;
+  gap: 20px;
+  height: 100vh;
+  overflow-y: auto;
+}
+
+.onboarding h2 {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.onboarding-desc {
+  color: var(--fg-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+  margin-bottom: 12px;
+}
+
+.onboarding-progress {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  padding: 8px 0;
+}
+
+.step-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--border);
+  transition: background 0.2s;
+}
+
+.step-dot.active {
+  background: var(--accent);
+  width: 24px;
+  border-radius: 4px;
+}
+
+.onboarding-step {
+  display: none;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.onboarding-step.active {
+  display: flex;
+}
+
+.slider-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--fg-muted);
+}
+
+.slider-row input[type="range"] {
+  flex: 1;
+  accent-color: var(--accent);
+}
+
+.policy-list {
+  padding-left: 18px;
+  font-size: 13px;
+  color: var(--fg-secondary);
+  line-height: 1.6;
+}
+
+.policy-list li {
+  margin-bottom: 6px;
+}
+
+.hint {
+  font-size: 11px;
+  color: var(--fg-muted);
+  margin-top: 2px;
+}
