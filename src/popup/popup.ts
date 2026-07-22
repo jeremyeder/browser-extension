@@ -123,8 +123,9 @@ loginBtn.addEventListener('click', async () => {
     authState = await sendMessage<AuthState>({ type: 'AUTH_LOGIN' });
     if (authState.isAuthenticated) await showMain();
   } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
     console.error('Login failed', err);
-    alert('Sign in failed. Check your SSO settings and try again.');
+    alert(`Sign in failed: ${msg}`);
   } finally {
     loginBtn.disabled = false;
     loginBtn.textContent = 'Sign In';
