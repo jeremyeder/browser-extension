@@ -28,13 +28,15 @@ export class ACPClient {
     try {
       return await this.request<EnterpriseAgent>('/api/ambient/v1/users/me/enterprise-agent');
     } catch {
-      // Fallback: list agents across projects and use the first one
-      const data = await this.request<{ items: EnterpriseAgent[] }>('/api/ambient/v1/agents');
+      // Fallback: list agents in the enterprise-assistant project
+      const data = await this.request<{ items: EnterpriseAgent[] }>(
+        '/api/ambient/v1/projects/enterprise-assistant/agents'
+      );
       if (data.items?.length > 0) {
         const agent = data.items[0];
-        return { id: agent.id, name: agent.name, projectId: agent.projectId ?? (agent as any).project_id };
+        return { id: agent.id, name: agent.name, projectId: (agent as any).project_id ?? 'enterprise-assistant' };
       }
-      throw new Error('No agents found. Ask your ACP admin to create one.');
+      throw new Error('No enterprise agent found. Ask your ACP admin to create one.');
     }
   }
 
