@@ -13,10 +13,18 @@ const storage = new StorageManager();
 const auth = new AuthManager(storage);
 const assistant = new AssistantClient(storage);
 
+// Open side panel on toolbar icon click
+chrome.action.onClicked.addListener(async (tab) => {
+  if (tab.id) {
+    await chrome.sidePanel.open({ tabId: tab.id });
+  }
+});
+
 // Initialize on install
 chrome.runtime.onInstalled.addListener(async (details) => {
   if (details.reason === 'install') {
     await storage.setSettings(DEFAULT_SETTINGS);
+    await chrome.sidePanel.setOptions({ enabled: true });
   }
 
   // Always recreate context menu items (also needed on update to reflect any renames)

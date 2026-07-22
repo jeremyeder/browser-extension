@@ -11,7 +11,6 @@
     "128": "assets/icons/icon128.png"
   },
   "action": {
-    "default_popup": "popup/index.html",
     "default_icon": {
       "16": "assets/icons/icon16.png",
       "32": "assets/icons/icon32.png",
@@ -19,6 +18,9 @@
       "128": "assets/icons/icon128.png"
     },
     "default_title": "Enterprise Assistant"
+  },
+  "side_panel": {
+    "default_path": "popup/index.html"
   },
   "background": {
     "service_worker": "background/service-worker.js",
@@ -44,7 +46,8 @@
     "scripting",
     "contextMenus",
     "notifications",
-    "alarms"
+    "alarms",
+    "sidePanel"
   ],
   "host_permissions": [
     "<all_urls>"
