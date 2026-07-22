@@ -488,26 +488,27 @@ async function initChatView(): Promise<void> {
       el('agent-name').textContent = 'Enterprise Assistant';
     }
 
-    // Show boot screen immediately (no flash of empty chat)
-    showBootScreen('Connecting to your Enterprise Assistant...');
+    // Show Artoo's greeting immediately from template — session boots in background
     showView('chat');
-    const sessionId = await ensureSession(client);
-    state.sessionId = sessionId;
-    await StorageManager.setCurrentSessionId(sessionId);
+    messagesEl.innerHTML = '';
+    appendAssistantMessage(
+      "Hey there! I'm **Artoo**, your ACP Enterprise Assistant. I'm here to help with:\n\n" +
+      "- **Agent Control Plane** — configuration, deployments, agent management\n" +
+      "- **Kubernetes** — workloads, networking, troubleshooting\n" +
+      "- **Engineering tasks** — architecture, code, infrastructure questions\n\n" +
+      "What can I help you with today?"
+    );
 
-    // Wait for Artoo's first greeting before showing chat
-    showBootScreen('Artoo is getting ready...');
-    let greeting: ApiMessage[] = [];
-    const greetDeadline = Date.now() + 120_000;
-    while (Date.now() < greetDeadline) {
+    // Boot session in background — ready by the time user finishes typing
+    void (async () => {
       try {
-        greeting = await client.getMessages(sessionId);
-        if (greeting.some((m) => m.role === 'assistant')) break;
-      } catch { /* keep polling */ }
-      await sleep(2000);
-    }
-    clearBootScreen();
-    if (greeting.length > 0) renderMessages(greeting);
+        const sid = await ensureSession(client);
+        state.sessionId = sid;
+        await StorageManager.setCurrentSessionId(sid);
+      } catch (err) {
+        appendErrorMessage('Failed to start session: ' + (err instanceof Error ? err.message : String(err)));
+      }
+    })();
   } catch (err) {
     console.error('Chat init failed:', err);
     await StorageManager.clearTokens();
