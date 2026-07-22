@@ -473,19 +473,24 @@ async function initChatView(): Promise<void> {
     const tokens = await ensureFreshToken();
     const client = makeClient(tokens);
 
-    // Check if onboarding needed
-    if (!state.settings.onboardingComplete) {
-      showView('onboarding');
-      return;
-    }
-
-    // Discover enterprise agent
+    // Discover enterprise agent — if one exists, skip onboarding
+    let agentFound = false;
     try {
       const agent = await client.getEnterpriseAgent();
       state.agent = agent;
       el('agent-name').textContent = agent.name;
+      agentFound = true;
+      if (!state.settings.onboardingComplete) {
+        state.settings = { ...state.settings, onboardingComplete: true };
+        await StorageManager.saveSettings(state.settings);
+      }
     } catch {
       el('agent-name').textContent = 'Enterprise Assistant';
+    }
+
+    if (!agentFound && !state.settings.onboardingComplete) {
+      showView('onboarding');
+      return;
     }
 
     // Show Artoo's greeting immediately from template — session boots in background
