@@ -103,8 +103,10 @@ The extension maintains one persistent session per Enterprise Agent.
    }
    ```
 
-**First session boot**: Takes ~90 seconds (sandbox provisioning). The extension
-polls for up to 5 minutes. The typing indicator stays visible during this time.
+**First session boot**: Takes ~25 seconds with SKIP_NDOTS_FIX=true on ROSA
+(~60s without). Future warm pools will reduce this to single-digit seconds.
+The extension shows a boot screen with spinner and status message during
+provisioning, polling session phase every 3 seconds for up to 5 minutes.
 
 **Subsequent messages**: Respond in seconds (session already Running).
 
@@ -359,3 +361,10 @@ The welcome screen SHALL communicate the Enterprise Assistant vision:
 - Over time it becomes a "second brain at work" for information, automation, and staying on top of what matters
 - Available through CLI, browser extension, web UI, and mobile app
 - CTA: "Build My Assistant" (primary) / "Skip — use defaults" (ghost)
+
+### ACP Control Plane: SKIP_NDOTS_FIX
+On ROSA/OpenShift, the ndots:1 DNS workaround (needed only for Kind/musl)
+wastes ~36 seconds per session boot due to pod delete/recreate retries.
+Set `SKIP_NDOTS_FIX=true` on the control plane deployment to bypass this.
+Session boot drops from ~62s to ~26s.
+Tracked: https://github.com/openshift-online/agent-control-plane/issues/421
