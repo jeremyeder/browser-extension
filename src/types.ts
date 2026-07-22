@@ -95,10 +95,12 @@ export interface ExtensionSettings {
   modelId: string;
   maxTokens: number;
   temperature: number;
-  ssoProvider: 'azure' | 'okta' | 'google' | 'custom';
+  ssoProvider: 'azure' | 'okta' | 'google' | 'keycloak' | 'custom';
   ssoClientId: string;
   /** Okta organisation subdomain (e.g. "mycompany" → mycompany.okta.com). Separate from clientId. */
   ssoOktaDomain: string;
+  /** Keycloak issuer URL (e.g. "https://keycloak.example.com/realms/my-realm"). */
+  ssoKeycloakIssuer: string;
   ssoAuthUrl?: string;
   ssoTokenUrl?: string;
   enablePageContext: boolean;
@@ -116,9 +118,10 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   modelId: 'claude-sonnet-4-6',
   maxTokens: 4096,
   temperature: 0.7,
-  ssoProvider: 'azure',
-  ssoClientId: '',
+  ssoProvider: 'keycloak',
+  ssoClientId: 'ambient-browser-extension',
   ssoOktaDomain: '',
+  ssoKeycloakIssuer: '',
   enablePageContext: true,
   enableAutoSummarize: false,
   enableTaskSync: false,

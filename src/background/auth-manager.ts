@@ -109,6 +109,10 @@ export class AuthManager {
 
   private getDefaultAuthUrl(settings: ExtensionSettings): string {
     switch (settings.ssoProvider) {
+      case 'keycloak': {
+        const issuer = this.resolveKeycloakIssuer(settings);
+        return `${issuer}/protocol/openid-connect/auth`;
+      }
       case 'azure':
         return 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize';
       case 'okta': {
@@ -124,6 +128,10 @@ export class AuthManager {
 
   private getDefaultTokenUrl(settings: ExtensionSettings): string {
     switch (settings.ssoProvider) {
+      case 'keycloak': {
+        const issuer = this.resolveKeycloakIssuer(settings);
+        return `${issuer}/protocol/openid-connect/token`;
+      }
       case 'azure':
         return 'https://login.microsoftonline.com/common/oauth2/v2.0/token';
       case 'okta': {
@@ -135,6 +143,12 @@ export class AuthManager {
       default:
         throw new Error('ssoTokenUrl must be configured for custom provider');
     }
+  }
+
+  private resolveKeycloakIssuer(settings: ExtensionSettings): string {
+    const issuer = settings.ssoKeycloakIssuer?.trim();
+    if (!issuer) throw new Error('Keycloak issuer URL must be configured (ssoKeycloakIssuer)');
+    return issuer.replace(/\/$/, '');
   }
 
   /** Okta uses a subdomain (e.g. "mycompany") separate from the OAuth client_id. */
