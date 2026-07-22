@@ -1,7 +1,7 @@
 import type { AuthTokens } from '../types';
 
 const CLIENT_ID = 'acp-browser-extension';
-const REALM = 'ambient';
+const REALM = 'ambient-code';
 
 function getKeycloakBaseUrl(acpServerUrl: string): string {
   try {
