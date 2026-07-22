@@ -368,3 +368,32 @@ wastes ~36 seconds per session boot due to pod delete/recreate retries.
 Set `SKIP_NDOTS_FIX=true` on the control plane deployment to bypass this.
 Session boot drops from ~62s to ~26s.
 Tracked: https://github.com/openshift-online/agent-control-plane/issues/421
+
+### Performance: Session Boot SLO
+Session boot time (from session creation to phase=Running) SHALL be
+monitored and tested against the following targets:
+
+| Environment | Target | Max Acceptable | Gate |
+|-------------|--------|---------------|------|
+| ROSA + SKIP_NDOTS_FIX | ≤25s | ≤40s | CI blocks on regression |
+| ROSA without fix | ≤65s | ≤90s | Warning only |
+| Kind (local) | ≤15s | ≤30s | CI blocks on regression |
+| Warm pools (future) | ≤5s | ≤10s | — |
+
+#### Scenario: Session boot does not regress
+- GIVEN an ACP cluster with a provisioned enterprise-agent and gateway
+- WHEN a new session is created via `POST /api/ambient/v1/sessions`
+- THEN the session reaches `phase=Running` within the Max Acceptable time
+- AND the boot time is recorded with timestamp, cluster type, and ndots-fix status
+
+#### Scenario: Boot phases are within confidence intervals
+- GIVEN 10 consecutive session boot measurements on the same cluster
+- WHEN the mean and p95 boot times are calculated
+- THEN the p95 is within 1.5x of the mean (no high-variance outliers)
+- AND any single measurement exceeding 2x the mean is flagged as anomalous
+
+The E2E test suite SHALL include a `session-boot-perf` test that:
+1. Creates a session, records timestamps for each phase transition
+2. Asserts total boot ≤ Max Acceptable for the detected environment
+3. Logs the phase timeline (Pending→Creating→Running with durations)
+4. Fails CI if the target regresses by >20% from the baseline
