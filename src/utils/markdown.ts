@@ -1,137 +1,72 @@
 /**
- * Lightweight, zero-dependency Markdown renderer for AI responses.
- * Supports: headings, bold, italic, inline code, fenced code blocks,
- * unordered/ordered lists, blockquotes, horizontal rules, and links.
- * Output is sanitised — no raw HTML pass-through.
+ * Renders a subset of Markdown to HTML.
+ * Handles: headings, bold, italic, inline code, fenced code blocks, links, lists, paragraphs.
  */
 export function renderMarkdown(text: string): string {
-  // Split into lines for block-level processing
-  const lines = text.split('\n');
-  const output: string[] = [];
+  if (!text) return '';
 
-  let i = 0;
-  while (i < lines.length) {
-    const line = lines[i];
+  // Protect fenced code blocks first — extract them to avoid other transforms touching them
+  const codeBlocks: string[] = [];
+  let html = text.replace(/```(?:[\w-]*)?\n([\s\S]*?)```/g, (_match, code) => {
+    const codeStr = String(code).replace(/\n$/, '');
+    const idx = codeBlocks.length;
+    codeBlocks.push(`<pre><code>${escapeHtml(codeStr)}</code></pre>`);
+    return `\x00CODE_BLOCK_${idx}\x00`;
+  });
 
-    // Fenced code block
-    if (line.startsWith('```')) {
-      const lang = line.slice(3).trim();
-      const codeLines: string[] = [];
-      i++;
-      while (i < lines.length && !lines[i].startsWith('```')) {
-        codeLines.push(escHtml(lines[i]));
-        i++;
-      }
-      const langAttr = lang ? ` class="language-${escHtml(lang)}"` : '';
-      output.push(`<pre><code${langAttr}>${codeLines.join('\n')}</code></pre>`);
-      i++; // skip closing ```
-      continue;
-    }
+  // Inline code
+  html = html.replace(/`([^`\n]+)`/g, (_m, code: string) => `<code>${escapeHtml(code)}</code>`);
 
-    // Headings
-    const headingMatch = line.match(/^(#{1,6})\s+(.*)/);
-    if (headingMatch) {
-      const level = headingMatch[1].length;
-      output.push(`<h${level}>${inlineMarkdown(headingMatch[2])}</h${level}>`);
-      i++;
-      continue;
-    }
+  // Bold **text**
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
 
-    // Horizontal rule
-    if (/^(?:---+|===+|\*\*\*+)\s*$/.test(line)) {
-      output.push('<hr />');
-      i++;
-      continue;
-    }
+  // Italic *text*
+  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
 
-    // Blockquote
-    if (line.startsWith('> ')) {
-      const quoteLines: string[] = [];
-      while (i < lines.length && lines[i].startsWith('> ')) {
-        quoteLines.push(lines[i].slice(2));
-        i++;
-      }
-      output.push(`<blockquote>${renderMarkdown(quoteLines.join('\n'))}</blockquote>`);
-      continue;
-    }
-
-    // Unordered list
-    if (/^[-*+]\s/.test(line)) {
-      const items: string[] = [];
-      while (i < lines.length && /^[-*+]\s/.test(lines[i])) {
-        items.push(`<li>${inlineMarkdown(lines[i].replace(/^[-*+]\s/, ''))}</li>`);
-        i++;
-      }
-      output.push(`<ul>${items.join('')}</ul>`);
-      continue;
-    }
-
-    // Ordered list
-    if (/^\d+\.\s/.test(line)) {
-      const items: string[] = [];
-      while (i < lines.length && /^\d+\.\s/.test(lines[i])) {
-        items.push(`<li>${inlineMarkdown(lines[i].replace(/^\d+\.\s/, ''))}</li>`);
-        i++;
-      }
-      output.push(`<ol>${items.join('')}</ol>`);
-      continue;
-    }
-
-    // Blank line → paragraph break (don't emit a tag, just skip)
-    if (line.trim() === '') {
-      // Close implicit paragraph context — handled by consuming adjacent blanks
-      if (output.length > 0 && !output[output.length - 1].endsWith('</p>')) {
-        output.push('<br />');
-      }
-      i++;
-      continue;
-    }
-
-    // Default: paragraph
-    output.push(`<p>${inlineMarkdown(line)}</p>`);
-    i++;
-  }
-
-  return output.join('');
-}
-
-/** Process inline markdown within a single line of text. */
-function inlineMarkdown(text: string): string {
-  // Escape HTML first, then re-introduce safe markup
-  let s = escHtml(text);
-
-  // Inline code (preserve escaping)
-  s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
-
-  // Bold + italic (*** or ___)
-  s = s.replace(/\*\*\*([^*]+)\*\*\*/g, '<strong><em>$1</em></strong>');
-  s = s.replace(/___([^_]+)___/g, '<strong><em>$1</em></strong>');
-
-  // Bold (** or __)
-  s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-  s = s.replace(/__([^_]+)__/g, '<strong>$1</strong>');
-
-  // Italic (* or _)
-  s = s.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-  s = s.replace(/_([^_]+)_/g, '<em>$1</em>');
-
-  // Links [text](url)
-  s = s.replace(
+  // Links [label](url)
+  html = html.replace(
     /\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g,
-    '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>',
+    '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>'
   );
 
-  // Strikethrough ~~text~~
-  s = s.replace(/~~([^~]+)~~/g, '<del>$1</del>');
+  // Headings (must be at start of line)
+  html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+  html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+  html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
 
-  return s;
+  // Lists — consecutive list items get wrapped in <ul>
+  html = html.replace(/^[*-] (.+)$/gm, '<li>$1</li>');
+  html = html.replace(/(<li>[\s\S]*?<\/li>)(\n(<li>[\s\S]*?<\/li>))*/g, (match) =>
+    `<ul>${match}</ul>`
+  );
+
+  // Numbered lists
+  html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
+
+  // Paragraphs — split on blank lines
+  const paragraphs = html.split(/\n{2,}/);
+  html = paragraphs
+    .map((block) => {
+      const b = block.trim();
+      if (!b) return '';
+      if (/^(<h[1-6]|<pre|<ul|<li|\x00CODE_BLOCK)/.test(b)) return b;
+      return `<p>${b.replace(/\n/g, '<br>')}</p>`;
+    })
+    .filter(Boolean)
+    .join('\n');
+
+  // Restore code blocks
+  codeBlocks.forEach((cb, i) => {
+    html = html.replace(`\x00CODE_BLOCK_${i}\x00`, cb);
+  });
+
+  return html;
 }
 
-function escHtml(s: string): string {
-  return s
+function escapeHtml(str: string): string {
+  return str
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+    .replace(/"/g, '&quot;');
 }

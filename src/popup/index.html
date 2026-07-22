@@ -1,162 +1,154 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Enterprise Assistant</title>
-  <!-- CSS injected by webpack -->
+  <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <div id="app">
-    <!-- Auth screen -->
-    <div id="auth-screen" class="screen hidden" aria-label="Sign in">
-      <div class="auth-content">
-        <div class="logo">
-          <img src="../assets/icons/icon48.png" alt="Enterprise Assistant" />
-          <h1>Enterprise Assistant</h1>
-        </div>
-        <p class="auth-description">Sign in to Agent Control Plane</p>
-        <form id="login-form" class="login-form">
-          <input type="text" id="login-username" class="input" placeholder="Username" autocomplete="username" required />
-          <input type="password" id="login-password" class="input" placeholder="Password" autocomplete="current-password" required />
-          <div id="login-error" class="login-error hidden"></div>
-          <button type="submit" id="login-btn" class="btn btn-primary btn-full">Sign In</button>
-        </form>
+  <div id="app" class="app">
+
+    <!-- Login View -->
+    <div id="view-login" class="view hidden">
+      <div class="login-header">
+        <h1 class="brand">Enterprise Assistant</h1>
+        <p class="brand-sub">Sign in to get started</p>
       </div>
+      <form id="login-form" class="login-form" autocomplete="on">
+        <div class="field">
+          <label for="server-url">ACP Server URL</label>
+          <input
+            id="server-url"
+            type="url"
+            placeholder="https://ambient-api-server-xyz.example.com"
+            autocomplete="url"
+            required
+          >
+        </div>
+        <div class="field">
+          <label for="username">Username</label>
+          <input
+            id="username"
+            type="text"
+            placeholder="username"
+            autocomplete="username"
+            required
+          >
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <input
+            id="password"
+            type="password"
+            placeholder="password"
+            autocomplete="current-password"
+            required
+          >
+        </div>
+        <div id="login-error" class="error hidden"></div>
+        <button type="submit" id="login-btn" class="btn btn-primary">
+          Sign In
+        </button>
+      </form>
     </div>
 
-    <!-- Main screen -->
-    <div id="main-screen" class="screen hidden">
-      <!-- Header -->
-      <header class="header">
-        <div class="header-left">
-          <img src="../assets/icons/icon16.png" alt="" class="header-icon" aria-hidden="true" />
-          <span class="header-title">Enterprise Assistant</span>
+    <!-- Chat View -->
+    <div id="view-chat" class="view hidden">
+      <header class="panel-header">
+        <div class="agent-info">
+          <span id="agent-name" class="agent-name">Enterprise Assistant</span>
         </div>
         <div class="header-actions">
-          <button id="export-btn" class="icon-btn hidden" title="Export conversation" aria-label="Export conversation as Markdown">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+          <button id="btn-context" class="btn btn-ghost btn-icon" title="Include page context">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="16" y1="13" x2="8" y2="13"/>
+              <line x1="16" y1="17" x2="8" y2="17"/>
+              <polyline points="10 9 9 9 8 9"/>
             </svg>
           </button>
-          <button id="new-chat-btn" class="icon-btn" title="New chat" aria-label="New chat">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-              <path d="M12 5v14M5 12h14"/>
+          <button id="btn-new-chat" class="btn btn-ghost btn-icon" title="New conversation">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
             </svg>
           </button>
-          <button id="settings-btn" class="icon-btn" title="Settings" aria-label="Open settings">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <button id="btn-settings" class="btn btn-ghost btn-icon" title="Settings">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="3"/>
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
             </svg>
           </button>
         </div>
       </header>
 
-      <!-- Tab bar (ARIA tablist) -->
-      <div class="tab-bar" role="tablist" aria-label="Assistant panels">
-        <button class="tab active" data-tab="chat" role="tab" aria-selected="true" aria-controls="chat-panel" id="tab-chat">Chat</button>
-        <button class="tab" data-tab="summary" role="tab" aria-selected="false" aria-controls="summary-panel" id="tab-summary">Summary</button>
-        <button class="tab" data-tab="tasks" role="tab" aria-selected="false" aria-controls="tasks-panel" id="tab-tasks">Tasks</button>
+      <div id="context-banner" class="context-banner hidden">
+        <span>Page context will be included</span>
+        <button id="btn-remove-context" class="btn-link">Remove</button>
       </div>
 
-      <!-- Chat panel -->
-      <div id="chat-panel" class="panel active" role="tabpanel" aria-labelledby="tab-chat">
-        <div id="chat-messages" class="chat-messages" aria-live="polite" aria-label="Conversation">
-          <div class="empty-state">
-            <p>Ask me anything, or type <kbd>/</kbd> for prompt templates.</p>
-          </div>
-        </div>
+      <main id="messages" class="messages" role="log" aria-live="polite"></main>
 
-        <!-- Slash-command autocomplete menu -->
-        <div id="template-menu" class="template-menu hidden" role="listbox" aria-label="Prompt templates"></div>
+      <div id="typing-indicator" class="typing-indicator hidden">
+        <span></span><span></span><span></span>
+      </div>
 
-        <div class="context-badge hidden" id="context-badge">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12" aria-hidden="true">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-            <polyline points="14 2 14 8 20 8"/>
+      <footer class="input-area">
+        <textarea
+          id="message-input"
+          class="message-input"
+          placeholder="Ask anything..."
+          rows="1"
+          aria-label="Message"
+        ></textarea>
+        <button id="btn-send" class="btn btn-primary btn-send" aria-label="Send">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M2 21L23 12 2 3v7l15 2-15 2z"/>
           </svg>
-          <span id="context-label">Page context included</span>
-          <button id="remove-context-btn" class="remove-context" aria-label="Remove context">×</button>
-        </div>
+        </button>
+      </footer>
+    </div>
 
-        <div class="chat-input-row">
-          <button id="attach-context-btn" class="icon-btn" title="Include page context" aria-label="Attach page context">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-              <polyline points="14 2 14 8 20 8"/>
-            </svg>
-          </button>
-          <textarea
-            id="chat-input"
-            class="chat-input"
-            placeholder="Ask anything, or type / for templates…"
-            rows="1"
-            aria-label="Chat message input"
-            aria-multiline="true"
-          ></textarea>
-          <button id="send-btn" class="icon-btn send-btn" title="Send" aria-label="Send message" disabled>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-              <line x1="22" y1="2" x2="11" y2="13"/>
-              <polygon points="22 2 15 22 11 13 2 9 22 2"/>
-            </svg>
-          </button>
+    <!-- Settings View -->
+    <div id="view-settings" class="view hidden">
+      <header class="panel-header">
+        <button id="btn-back" class="btn btn-ghost btn-icon" title="Back">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="15 18 9 12 15 6"/>
+          </svg>
+        </button>
+        <h2 class="view-title">Settings</h2>
+      </header>
+      <div class="settings-body">
+        <div class="field">
+          <label for="settings-server-url">ACP Server URL</label>
+          <input
+            id="settings-server-url"
+            type="url"
+            placeholder="https://ambient-api-server-xyz.example.com"
+            autocomplete="url"
+          >
         </div>
-      </div>
-
-      <!-- Summary panel -->
-      <div id="summary-panel" class="panel" role="tabpanel" aria-labelledby="tab-summary" hidden>
-        <div class="panel-actions">
-          <button id="summarize-btn" class="btn btn-primary">Summarize This Page</button>
+        <div class="field field-row">
+          <label for="settings-notifications">Notifications</label>
+          <input id="settings-notifications" type="checkbox">
         </div>
-        <div id="summary-content" class="summary-content hidden" aria-live="polite">
-          <h3>Summary</h3>
-          <p id="summary-text"></p>
-          <h3>Key Points</h3>
-          <ul id="key-points-list"></ul>
-          <div id="action-items-section" class="hidden">
-            <h3>Action Items</h3>
-            <ul id="action-items-list"></ul>
-          </div>
-        </div>
-      </div>
-
-      <!-- Tasks panel -->
-      <div id="tasks-panel" class="panel" role="tabpanel" aria-labelledby="tab-tasks" hidden>
-        <div class="panel-actions">
-          <button id="add-task-btn" class="btn btn-primary" aria-expanded="false" aria-controls="add-task-form">+ Add Task</button>
-        </div>
-        <div id="add-task-form" class="task-form hidden" aria-hidden="true">
-          <label for="task-title-input" class="sr-only">Task title</label>
-          <input type="text" id="task-title-input" placeholder="Task title" class="input" required />
-          <label for="task-desc-input" class="sr-only">Description (optional)</label>
-          <textarea id="task-desc-input" placeholder="Description (optional)" class="input" rows="2"></textarea>
-          <label for="task-priority-select" class="sr-only">Priority</label>
-          <select id="task-priority-select" class="input">
-            <option value="low">Low priority</option>
-            <option value="medium" selected>Medium priority</option>
-            <option value="high">High priority</option>
+        <div class="field">
+          <label for="settings-theme">Theme</label>
+          <select id="settings-theme">
+            <option value="system">System default</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
           </select>
-          <div class="form-actions">
-            <button id="save-task-btn" class="btn btn-primary btn-sm">Save</button>
-            <button id="cancel-task-btn" class="btn btn-secondary btn-sm">Cancel</button>
-          </div>
         </div>
-        <ul id="tasks-list" class="tasks-list" aria-label="Task list"></ul>
+        <button id="btn-save-settings" class="btn btn-primary">Save</button>
+        <button id="btn-signout" class="btn btn-danger">Sign out</button>
+        <p id="settings-status" class="status-msg hidden"></p>
       </div>
     </div>
 
-    <!-- Loading overlay -->
-    <div id="loading" class="loading hidden" role="status" aria-label="Loading">
-      <div class="spinner"></div>
-    </div>
-
-    <!-- User info bar -->
-    <div id="user-bar" class="user-bar hidden" aria-label="Signed-in user">
-      <img id="user-avatar" class="user-avatar" src="" alt="" aria-hidden="true" />
-      <span id="user-name" class="user-name"></span>
-      <button id="logout-btn" class="btn-link">Sign out</button>
-    </div>
   </div>
   <script src="popup.js"></script>
 </body>

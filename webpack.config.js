@@ -1,4 +1,5 @@
 const path = require('path');
+const fs = require('fs');
 const CopyPlugin = require('copy-webpack-plugin');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
@@ -6,6 +7,16 @@ const { CleanWebpackPlugin } = require('clean-webpack-plugin');
 
 module.exports = (env, argv) => {
   const isProduction = argv.mode === 'production';
+
+  const copyPatterns = [
+    { from: 'manifest.json', to: 'manifest.json' },
+    { from: '_locales', to: '_locales' },
+  ];
+
+  // Only copy assets if the directory exists (icons may not be generated yet)
+  if (fs.existsSync(path.resolve(__dirname, 'assets'))) {
+    copyPatterns.push({ from: 'assets', to: 'assets' });
+  }
 
   return {
     entry: {
@@ -50,12 +61,7 @@ module.exports = (env, argv) => {
         filename: 'options/index.html',
         chunks: ['options/options'],
       }),
-      new CopyPlugin({
-        patterns: [
-          { from: 'manifest.json', to: 'manifest.json' },
-          { from: 'assets', to: 'assets' },
-        ],
-      }),
+      new CopyPlugin({ patterns: copyPatterns }),
     ],
     optimization: {
       splitChunks: false,

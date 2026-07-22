@@ -1,20 +1,31 @@
-#!/usr/bin/env node
 /**
- * Package the built extension into a .zip for Chrome Web Store submission.
- * Run after `npm run build`: node scripts/package.js
+ * Packages the built extension into a zip file for distribution.
+ * Usage: node scripts/package.js (after npm run build)
  */
-const fs = require('fs');
 const path = require('path');
+const fs = require('fs');
 const { execSync } = require('child_process');
 
-const distDir = path.resolve(__dirname, '..', 'dist');
-const outDir = path.resolve(__dirname, '..', 'releases');
-const manifest = JSON.parse(fs.readFileSync(path.join(distDir, 'manifest.json'), 'utf8'));
-const version = manifest.version;
+const pkg = require('../package.json');
+const distDir = path.join(__dirname, '..', 'dist');
+const releasesDir = path.join(__dirname, '..', 'releases');
+const zipName = `enterprise-assistant-${pkg.version}.zip`;
+const zipPath = path.join(releasesDir, zipName);
 
-fs.mkdirSync(outDir, { recursive: true });
+if (!fs.existsSync(distDir)) {
+  console.error('dist/ not found — run "npm run build" first');
+  process.exit(1);
+}
 
-const zipPath = path.join(outDir, `enterprise-assistant-${version}.zip`);
-execSync(`cd "${distDir}" && zip -r "${zipPath}" .`, { stdio: 'inherit' });
+if (!fs.existsSync(releasesDir)) {
+  fs.mkdirSync(releasesDir, { recursive: true });
+}
 
-console.log(`\nPackaged: ${zipPath}`);
+try {
+  execSync(`cd "${distDir}" && zip -r "${zipPath}" .`, { stdio: 'inherit' });
+  const { size } = fs.statSync(zipPath);
+  console.log(`\nPackaged: releases/${zipName} (${Math.round(size / 1024)} KB)`);
+} catch (err) {
+  console.error('Packaging failed:', err.message);
+  process.exit(1);
+}

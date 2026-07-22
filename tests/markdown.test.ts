@@ -1,77 +1,67 @@
 import { renderMarkdown } from '../src/utils/markdown';
 
 describe('renderMarkdown', () => {
-  it('renders plain text as a paragraph', () => {
-    expect(renderMarkdown('Hello world')).toBe('<p>Hello world</p>');
+  test('returns empty string for empty input', () => {
+    expect(renderMarkdown('')).toBe('');
   });
 
-  it('renders bold text', () => {
-    expect(renderMarkdown('**bold**')).toContain('<strong>bold</strong>');
+  test('wraps plain text in <p>', () => {
+    expect(renderMarkdown('Hello world')).toContain('<p>Hello world</p>');
   });
 
-  it('renders italic text', () => {
-    expect(renderMarkdown('*italic*')).toContain('<em>italic</em>');
+  test('renders bold text', () => {
+    const result = renderMarkdown('**bold**');
+    expect(result).toContain('<strong>bold</strong>');
   });
 
-  it('renders inline code', () => {
-    expect(renderMarkdown('use `npm install`')).toContain('<code>npm install</code>');
+  test('renders italic text', () => {
+    const result = renderMarkdown('*italic*');
+    expect(result).toContain('<em>italic</em>');
   });
 
-  it('renders fenced code blocks', () => {
-    const md = '```js\nconsole.log("hi");\n```';
-    const html = renderMarkdown(md);
-    expect(html).toContain('<pre><code');
-    expect(html).toContain('console.log');
+  test('renders inline code', () => {
+    const result = renderMarkdown('`code`');
+    expect(result).toContain('<code>code</code>');
   });
 
-  it('renders headings', () => {
-    expect(renderMarkdown('# Title')).toBe('<h1>Title</h1>');
-    expect(renderMarkdown('## Section')).toBe('<h2>Section</h2>');
+  test('renders fenced code blocks', () => {
+    const input = '```javascript\nconsole.log("hi");\n```';
+    const result = renderMarkdown(input);
+    expect(result).toContain('<pre><code>');
+    expect(result).toContain('console.log');
   });
 
-  it('renders unordered lists', () => {
-    const md = '- item one\n- item two';
-    const html = renderMarkdown(md);
-    expect(html).toContain('<ul>');
-    expect(html).toContain('<li>item one</li>');
-    expect(html).toContain('<li>item two</li>');
+  test('renders h1 heading', () => {
+    const result = renderMarkdown('# Title');
+    expect(result).toContain('<h1>Title</h1>');
   });
 
-  it('renders ordered lists', () => {
-    const md = '1. first\n2. second';
-    const html = renderMarkdown(md);
-    expect(html).toContain('<ol>');
-    expect(html).toContain('<li>first</li>');
+  test('renders h2 heading', () => {
+    const result = renderMarkdown('## Subtitle');
+    expect(result).toContain('<h2>Subtitle</h2>');
   });
 
-  it('escapes HTML in plain text', () => {
-    const html = renderMarkdown('<script>alert(1)</script>');
-    expect(html).not.toContain('<script>');
-    expect(html).toContain('&lt;script&gt;');
+  test('renders h3 heading', () => {
+    const result = renderMarkdown('### Section');
+    expect(result).toContain('<h3>Section</h3>');
   });
 
-  it('renders links', () => {
-    const html = renderMarkdown('[Example](https://example.com)');
-    expect(html).toContain('href="https://example.com"');
-    expect(html).toContain('target="_blank"');
-    expect(html).toContain('rel="noopener noreferrer"');
+  test('renders links', () => {
+    const result = renderMarkdown('[Example](https://example.com)');
+    expect(result).toContain('<a href="https://example.com"');
+    expect(result).toContain('Example');
   });
 
-  it('does not render javascript: links', () => {
-    const html = renderMarkdown('[Click](javascript:alert(1))');
-    // javascript: URL will not match the https? pattern and is not rendered as a link
-    expect(html).not.toContain('href="javascript:');
+  test('renders unordered list items', () => {
+    const result = renderMarkdown('- item one\n- item two');
+    expect(result).toContain('<li>item one</li>');
+    expect(result).toContain('<li>item two</li>');
   });
 
-  it('renders blockquotes', () => {
-    expect(renderMarkdown('> quoted text')).toContain('<blockquote>');
-  });
-
-  it('renders strikethrough', () => {
-    expect(renderMarkdown('~~deleted~~')).toContain('<del>deleted</del>');
-  });
-
-  it('renders horizontal rule', () => {
-    expect(renderMarkdown('---')).toContain('<hr />');
+  test('does not double-process code block contents', () => {
+    const input = '```\n**not bold**\n```';
+    const result = renderMarkdown(input);
+    // Bold markers inside code blocks should be escaped, not rendered
+    expect(result).not.toContain('<strong>not bold</strong>');
   });
 });

@@ -1,667 +1,458 @@
-import type { AuthState, ChatMessage, Task } from '../types';
-import { renderMarkdown } from '../utils/markdown';
-import { BUILT_IN_TEMPLATES, fillTemplate } from '../utils/prompt-templates';
 import './popup.css';
+import { StorageManager } from '../background/storage-manager';
+import { KeycloakAuth } from '../lib/auth';
+import { ACPClient } from '../lib/acp-client';
+import { renderMarkdown } from '../utils/markdown';
+import type { AuthTokens, Settings, EnterpriseAgent, ApiMessage, PageContext } from '../types';
 
-// ── Theme ─────────────────────────────────────────────────────────────────
-async function applyTheme() {
-  const data = await chrome.storage.local.get('settings');
-  const theme = data.settings?.theme ?? 'system';
-  if (theme === 'system') {
-    document.documentElement.removeAttribute('data-theme');
-  } else {
-    document.documentElement.setAttribute('data-theme', theme);
-  }
+// ─── State ────────────────────────────────────────────────────────────────────
+
+interface AppState {
+  tokens: AuthTokens | null;
+  settings: Settings;
+  agent: EnterpriseAgent | null;
+  sessionId: string | null;
+  includeContext: boolean;
+  pendingContext: PageContext | null;
 }
-applyTheme();
-chrome.storage.onChanged.addListener((changes) => {
-  if (changes.settings) applyTheme();
-});
 
-// ── State ──────────────────────────────────────────────────────────────────
-let authState: AuthState = { isAuthenticated: false };
-let currentSessionId: string | null = null;
-let messages: ChatMessage[] = [];
-let pageContext: { pageText?: string; selectedText?: string } | null = null;
-let tasks: Task[] = [];
-let isBusy = false;
-
-// ── DOM Refs ───────────────────────────────────────────────────────────────
-const $ = <T extends HTMLElement>(id: string): T => {
-  const el = document.getElementById(id);
-  if (!el) throw new Error(`Element #${id} not found — check popup HTML`);
-  return el as T;
+const state: AppState = {
+  tokens: null,
+  settings: { acpServerUrl: '', notifications: true, theme: 'system' },
+  agent: null,
+  sessionId: null,
+  includeContext: false,
+  pendingContext: null,
 };
 
-const authScreen = $('auth-screen');
-const mainScreen = $('main-screen');
-const loadingOverlay = $('loading');
-const userBar = $('user-bar');
+// ─── DOM helpers ──────────────────────────────────────────────────────────────
 
-const loginBtn = $<HTMLButtonElement>('login-btn');
-const logoutBtn = $<HTMLButtonElement>('logout-btn');
-const userAvatar = $<HTMLImageElement>('user-avatar');
-const userName = $('user-name');
+function el<T extends HTMLElement>(id: string): T {
+  const elem = document.getElementById(id);
+  if (!elem) throw new Error(`Element #${id} not found`);
+  return elem as T;
+}
 
-const chatMessages = $('chat-messages');
-const chatInput = $<HTMLTextAreaElement>('chat-input');
-const sendBtn = $<HTMLButtonElement>('send-btn');
-const attachContextBtn = $<HTMLButtonElement>('attach-context-btn');
-const removeContextBtn = $<HTMLButtonElement>('remove-context-btn');
-const contextBadge = $('context-badge');
-const contextLabel = $('context-label');
-const templateMenu = $('template-menu');
-const newChatBtn = $<HTMLButtonElement>('new-chat-btn');
-const settingsBtn = $<HTMLButtonElement>('settings-btn');
-const exportBtn = $<HTMLButtonElement>('export-btn');
+// ─── Views ────────────────────────────────────────────────────────────────────
 
-const tabs = document.querySelectorAll<HTMLButtonElement>('.tab');
-const panels = document.querySelectorAll<HTMLDivElement>('.panel');
+type ViewName = 'login' | 'chat' | 'settings';
 
-const summarizeBtn = $<HTMLButtonElement>('summarize-btn');
-const summaryContent = $('summary-content');
-const summaryText = $('summary-text');
-const keyPointsList = $<HTMLUListElement>('key-points-list');
-const actionItemsSection = $('action-items-section');
-const actionItemsList = $<HTMLUListElement>('action-items-list');
+function showView(name: ViewName): void {
+  (['login', 'chat', 'settings'] as const).forEach((v) => {
+    el(`view-${v}`).classList.toggle('hidden', v !== name);
+  });
+}
 
-const addTaskBtn = $<HTMLButtonElement>('add-task-btn');
-const addTaskForm = $('add-task-form');
-const taskTitleInput = $<HTMLInputElement>('task-title-input');
-const taskDescInput = $<HTMLTextAreaElement>('task-desc-input');
-const taskPrioritySelect = $<HTMLSelectElement>('task-priority-select');
-const saveTaskBtn = $<HTMLButtonElement>('save-task-btn');
-const cancelTaskBtn = $<HTMLButtonElement>('cancel-task-btn');
-const tasksList = $<HTMLUListElement>('tasks-list');
+// ─── Theme ────────────────────────────────────────────────────────────────────
 
-// ── Init ───────────────────────────────────────────────────────────────────
-async function init() {
-  showLoading(true);
-  try {
-    authState = await sendMessage<AuthState>({ type: 'AUTH_CHECK' });
-    if (authState.isAuthenticated) {
-      await showMain();
-    } else {
-      showAuth();
+function applyTheme(theme: 'light' | 'dark' | 'system'): void {
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const resolved = theme === 'system' ? (prefersDark ? 'dark' : 'light') : theme;
+  document.documentElement.setAttribute('data-theme', resolved);
+}
+
+// ─── Auth helpers ─────────────────────────────────────────────────────────────
+
+async function ensureFreshToken(): Promise<AuthTokens> {
+  if (!state.tokens) throw new Error('Not signed in');
+
+  const auth = new KeycloakAuth(state.settings.acpServerUrl);
+  if (auth.isExpired(state.tokens)) {
+    if (!state.tokens.refreshToken) {
+      await StorageManager.clearTokens();
+      state.tokens = null;
+      showView('login');
+      throw new Error('Session expired. Please sign in again.');
     }
-  } catch {
-    showAuth();
-  } finally {
-    showLoading(false);
+    state.tokens = await auth.refresh(state.tokens.refreshToken);
+    await StorageManager.saveTokens(state.tokens);
+  }
+
+  return state.tokens;
+}
+
+// ─── Client factory ───────────────────────────────────────────────────────────
+
+function makeClient(tokens: AuthTokens): ACPClient {
+  return new ACPClient(state.settings.acpServerUrl, tokens.accessToken);
+}
+
+// ─── Messages UI ──────────────────────────────────────────────────────────────
+
+const messagesEl = el<HTMLElement>('messages');
+const typingEl = el<HTMLElement>('typing-indicator');
+
+function appendUserMessage(content: string): void {
+  const div = document.createElement('div');
+  div.className = 'message message-user';
+  div.textContent = content;
+  messagesEl.appendChild(div);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+function appendAssistantMessage(content: string): void {
+  const div = document.createElement('div');
+  div.className = 'message message-assistant';
+  div.innerHTML = renderMarkdown(content);
+  messagesEl.appendChild(div);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+function appendErrorMessage(text: string): void {
+  const div = document.createElement('div');
+  div.className = 'message message-error';
+  div.textContent = text;
+  messagesEl.appendChild(div);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+function showTyping(visible: boolean): void {
+  typingEl.classList.toggle('hidden', !visible);
+}
+
+function renderMessages(messages: ApiMessage[]): void {
+  messagesEl.innerHTML = '';
+  for (const msg of messages) {
+    if (msg.role === 'user') {
+      appendUserMessage(msg.content);
+    } else {
+      appendAssistantMessage(msg.content);
+    }
   }
 }
 
-// Listen for settings changes broadcast from service worker
-chrome.runtime.onMessage.addListener((msg: { type: string }) => {
-  if (msg.type === 'SETTINGS_CHANGED') {
-    // Settings updated in options page — nothing to do in popup for now
-    // Future: re-fetch and show any relevant settings badge
+// ─── Page context ─────────────────────────────────────────────────────────────
+
+const contextBanner = el('context-banner');
+const btnContext = el('btn-context');
+
+async function fetchPageContext(): Promise<PageContext | null> {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab.id) return null;
+
+    const response = await chrome.tabs.sendMessage(tab.id, { type: 'GET_PAGE_CONTEXT' }) as
+      | { type: 'PAGE_CONTEXT'; context: PageContext }
+      | undefined;
+
+    return response?.context ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function updateContextBanner(): void {
+  contextBanner.classList.toggle('hidden', !state.includeContext);
+  btnContext.setAttribute('aria-pressed', String(state.includeContext));
+}
+
+btnContext.addEventListener('click', () => {
+  void (async () => {
+    if (!state.includeContext) {
+      const ctx = await fetchPageContext();
+      state.pendingContext = ctx;
+      state.includeContext = true;
+    } else {
+      state.includeContext = false;
+      state.pendingContext = null;
+    }
+    updateContextBanner();
+  })();
+});
+
+el('btn-remove-context').addEventListener('click', () => {
+  state.includeContext = false;
+  state.pendingContext = null;
+  updateContextBanner();
+});
+
+// ─── Send message ─────────────────────────────────────────────────────────────
+
+const inputEl = el<HTMLTextAreaElement>('message-input');
+const sendBtn = el<HTMLButtonElement>('btn-send');
+
+async function sendMessage(): Promise<void> {
+  const raw = inputEl.value.trim();
+  if (!raw) return;
+
+  inputEl.value = '';
+  inputEl.style.height = 'auto';
+
+  let content = raw;
+  if (state.includeContext && state.pendingContext) {
+    const ctx = state.pendingContext;
+    const contextBlock =
+      `\n\n---\n**Page context**\nURL: ${ctx.url}\nTitle: ${ctx.title}\n` +
+      (ctx.selectedText ? `Selected text:\n${ctx.selectedText}\n` : '') +
+      (ctx.bodyText ? `Page text (truncated):\n${ctx.bodyText}` : '');
+    content = raw + contextBlock;
+    // Clear context after use
+    state.includeContext = false;
+    state.pendingContext = null;
+    updateContextBanner();
+  }
+
+  appendUserMessage(raw);
+
+  sendBtn.disabled = true;
+  showTyping(true);
+
+  try {
+    const tokens = await ensureFreshToken();
+    const client = makeClient(tokens);
+
+    // Ensure we have a session
+    let sessionId = state.sessionId;
+    if (!sessionId) {
+      if (!state.agent) throw new Error('No enterprise agent found');
+      const session = await client.createSession(state.agent.id, state.agent.projectId);
+      sessionId = session.id;
+      state.sessionId = sessionId;
+      await StorageManager.setCurrentSessionId(sessionId);
+    }
+
+    await client.sendMessage(sessionId, content);
+
+    // Poll for the assistant reply (simple polling — up to 60s)
+    const reply = await waitForReply(sessionId, client);
+    if (reply) {
+      appendAssistantMessage(reply);
+    }
+  } catch (err) {
+    appendErrorMessage(err instanceof Error ? err.message : 'Failed to send message');
+  } finally {
+    sendBtn.disabled = false;
+    showTyping(false);
+  }
+}
+
+async function waitForReply(
+  sessionId: string,
+  client: ACPClient,
+  timeoutMs = 60_000,
+  pollIntervalMs = 1500
+): Promise<string | null> {
+  const deadline = Date.now() + timeoutMs;
+
+  // Snapshot the message count right after sending, so we only watch for truly new messages
+  let baseline = 0;
+  try {
+    const msgs = await client.getMessages(sessionId);
+    baseline = msgs.length;
+  } catch {
+    baseline = 0;
+  }
+
+  while (Date.now() < deadline) {
+    await sleep(pollIntervalMs);
+    try {
+      const msgs = await client.getMessages(sessionId);
+      if (msgs.length > baseline) {
+        const newMsgs = msgs.slice(baseline);
+        const assistantMsg = [...newMsgs].reverse().find((m) => m.role === 'assistant');
+        if (assistantMsg) return assistantMsg.content;
+        // User message appeared but no assistant reply yet — update baseline
+        baseline = msgs.length;
+      }
+    } catch {
+      // continue polling
+    }
+  }
+
+  return null;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Auto-grow textarea
+inputEl.addEventListener('input', () => {
+  inputEl.style.height = 'auto';
+  inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + 'px';
+});
+
+inputEl.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    void sendMessage();
   }
 });
 
-// New chat button
-newChatBtn.addEventListener('click', () => {
-  messages = [];
-  currentSessionId = null;
-  chatMessages.innerHTML = '<div class="empty-state"><p>Ask me anything, or type <kbd>/</kbd> for prompt templates.</p></div>';
-  exportBtn.classList.add('hidden');
+sendBtn.addEventListener('click', () => void sendMessage());
+
+// ─── New chat ─────────────────────────────────────────────────────────────────
+
+el('btn-new-chat').addEventListener('click', () => {
+  void (async () => {
+    state.sessionId = null;
+    state.includeContext = false;
+    state.pendingContext = null;
+    updateContextBanner();
+    await StorageManager.setCurrentSessionId(null);
+    messagesEl.innerHTML = '';
+  })();
 });
 
-// Settings button — opens options page in new tab
-settingsBtn.addEventListener('click', () => {
-  void chrome.runtime.openOptionsPage();
+// ─── Settings navigation ──────────────────────────────────────────────────────
+
+const settingsServerUrl = el<HTMLInputElement>('settings-server-url');
+const settingsNotifications = el<HTMLInputElement>('settings-notifications');
+const settingsTheme = el<HTMLSelectElement>('settings-theme');
+const settingsStatus = el('settings-status');
+
+function openSettings(): void {
+  settingsServerUrl.value = state.settings.acpServerUrl;
+  settingsNotifications.checked = state.settings.notifications;
+  settingsTheme.value = state.settings.theme;
+  settingsStatus.className = 'status-msg hidden';
+  showView('settings');
+}
+
+el('btn-settings').addEventListener('click', openSettings);
+el('btn-back').addEventListener('click', () => showView('chat'));
+
+el('btn-save-settings').addEventListener('click', () => {
+  void (async () => {
+    const newSettings: Settings = {
+      acpServerUrl: settingsServerUrl.value.trim(),
+      notifications: settingsNotifications.checked,
+      theme: settingsTheme.value as 'light' | 'dark' | 'system',
+    };
+    await StorageManager.saveSettings(newSettings);
+    state.settings = newSettings;
+    applyTheme(newSettings.theme);
+
+    settingsStatus.textContent = 'Saved';
+    settingsStatus.className = 'status-msg success';
+    setTimeout(() => {
+      settingsStatus.className = 'status-msg hidden';
+    }, 2000);
+  })();
 });
 
-// Export conversation as Markdown download
-exportBtn.addEventListener('click', () => exportConversation());
+// Instant theme preview
+settingsTheme.addEventListener('change', () => {
+  applyTheme(settingsTheme.value as 'light' | 'dark' | 'system');
+});
 
-// ── Auth ───────────────────────────────────────────────────────────────────
-const loginForm = $<HTMLFormElement>('login-form');
-const loginUsername = $<HTMLInputElement>('login-username');
-const loginPassword = $<HTMLInputElement>('login-password');
-const loginError = $<HTMLDivElement>('login-error');
+// Sign out
+el('btn-signout').addEventListener('click', () => {
+  void (async () => {
+    await StorageManager.clearTokens();
+    await StorageManager.setCurrentSessionId(null);
+    state.tokens = null;
+    state.sessionId = null;
+    state.agent = null;
+    showView('login');
+  })();
+});
 
-loginForm.addEventListener('submit', async (e) => {
+// ─── Login ────────────────────────────────────────────────────────────────────
+
+const loginForm = el<HTMLFormElement>('login-form');
+const loginError = el('login-error');
+const loginBtn = el<HTMLButtonElement>('login-btn');
+const serverUrlInput = el<HTMLInputElement>('server-url');
+
+loginForm.addEventListener('submit', (e) => {
   e.preventDefault();
+  void handleLogin();
+});
+
+async function handleLogin(): Promise<void> {
+  loginError.classList.add('hidden');
   loginBtn.disabled = true;
   loginBtn.textContent = 'Signing in…';
-  loginError.classList.add('hidden');
+
   try {
-    authState = await sendMessage<AuthState>({
-      type: 'AUTH_LOGIN',
-      payload: { username: loginUsername.value, password: loginPassword.value },
-    });
-    if (authState.isAuthenticated) await showMain();
+    const serverUrl = serverUrlInput.value.trim();
+    const username = el<HTMLInputElement>('username').value;
+    const password = el<HTMLInputElement>('password').value;
+
+    if (!serverUrl || !username || !password) {
+      showLoginError('All fields are required');
+      return;
+    }
+
+    // Save the server URL to settings first
+    const currentSettings = await StorageManager.getSettings();
+    const updatedSettings = { ...currentSettings, acpServerUrl: serverUrl };
+    await StorageManager.saveSettings(updatedSettings);
+    state.settings = updatedSettings;
+
+    const auth = new KeycloakAuth(serverUrl);
+    const tokens = await auth.login(username, password);
+    await StorageManager.saveTokens(tokens);
+    state.tokens = tokens;
+
+    await initChatView();
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    loginError.textContent = msg;
-    loginError.classList.remove('hidden');
+    showLoginError(err instanceof Error ? err.message : 'Login failed');
   } finally {
     loginBtn.disabled = false;
     loginBtn.textContent = 'Sign In';
   }
-});
+}
 
-logoutBtn.addEventListener('click', async () => {
-  await sendMessage({ type: 'AUTH_LOGOUT' });
-  authState = { isAuthenticated: false };
-  messages = [];
-  currentSessionId = null;
-  showAuth();
-});
+function showLoginError(message: string): void {
+  loginError.textContent = message;
+  loginError.classList.remove('hidden');
+}
 
-// ── Tabs ───────────────────────────────────────────────────────────────────
-tabs.forEach((tab) => {
-  tab.addEventListener('click', () => {
-    const target = tab.dataset.tab;
-    tabs.forEach((t) => {
-      t.classList.toggle('active', t.dataset.tab === target);
-      t.setAttribute('aria-selected', String(t.dataset.tab === target));
-    });
-    panels.forEach((p) => {
-      const isTarget = p.id === `${target}-panel`;
-      p.classList.toggle('active', isTarget);
-      p.hidden = !isTarget;
-    });
-  });
-});
+// ─── Chat view init ───────────────────────────────────────────────────────────
 
-// ── Chat ───────────────────────────────────────────────────────────────────
-chatInput.addEventListener('input', () => {
-  chatInput.style.height = 'auto';
-  chatInput.style.height = `${Math.min(chatInput.scrollHeight, 120)}px`;
-  sendBtn.disabled = chatInput.value.trim() === '' || isBusy;
-  handleSlashCommand(chatInput.value);
-});
-
-chatInput.addEventListener('keydown', (e) => {
-  // Template menu navigation
-  if (!templateMenu.classList.contains('hidden')) {
-    const items = templateMenu.querySelectorAll<HTMLButtonElement>('[role="option"]');
-    const active = templateMenu.querySelector<HTMLButtonElement>('[aria-selected="true"]');
-    const idx = active ? Array.from(items).indexOf(active) : -1;
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      const next = items[(idx + 1) % items.length];
-      setActiveOption(items, next);
-      return;
-    }
-    if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      const prev = items[(idx - 1 + items.length) % items.length];
-      setActiveOption(items, prev);
-      return;
-    }
-    if (e.key === 'Enter' || e.key === 'Tab') {
-      e.preventDefault();
-      const selected = templateMenu.querySelector<HTMLButtonElement>('[aria-selected="true"]');
-      selected?.click();
-      return;
-    }
-    if (e.key === 'Escape') {
-      closeTemplateMenu();
-      return;
-    }
-  }
-
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    if (!sendBtn.disabled) void doChat();
-  }
-});
-
-sendBtn.addEventListener('click', () => void doChat());
-
-attachContextBtn.addEventListener('click', async () => {
-  if (pageContext) {
-    pageContext = null;
-    contextBadge.classList.add('hidden');
-    return;
-  }
+async function initChatView(): Promise<void> {
   try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab.id) return;
-    const ctx = await chrome.tabs.sendMessage<
-      { type: string },
-      { pageText?: string; selectedText?: string; url: string; title: string }
-    >(tab.id, { type: 'CONTEXT_EXTRACT' });
-    if (!ctx) return;
-    pageContext = { pageText: ctx.pageText, selectedText: ctx.selectedText };
-    contextLabel.textContent = ctx.selectedText
-      ? `"${ctx.selectedText.slice(0, 40)}…" selected`
-      : `Page context included`;
-    contextBadge.classList.remove('hidden');
-  } catch {
-    // Extension may not have scripting access to this tab — show tooltip instead of alert
-    attachContextBtn.title = 'Cannot access this page (try a regular web page)';
-    setTimeout(() => {
-      attachContextBtn.title = 'Include page context';
-    }, 3000);
-  }
-});
+    const tokens = await ensureFreshToken();
+    const client = makeClient(tokens);
 
-removeContextBtn.addEventListener('click', () => {
-  pageContext = null;
-  contextBadge.classList.add('hidden');
-});
+    // Discover enterprise agent
+    const agent = await client.getEnterpriseAgent();
+    state.agent = agent;
+    el('agent-name').textContent = agent.name;
 
-// ── Slash-command / Prompt Templates ──────────────────────────────────────
-function handleSlashCommand(value: string) {
-  if (!value.startsWith('/')) {
-    closeTemplateMenu();
-    return;
-  }
-
-  const query = value.slice(1).toLowerCase();
-  const matches = BUILT_IN_TEMPLATES.filter(
-    (t) => t.id.includes(query) || t.label.includes(query) || t.description.toLowerCase().includes(query),
-  );
-
-  if (matches.length === 0) {
-    closeTemplateMenu();
-    return;
-  }
-
-  templateMenu.innerHTML = '';
-  matches.forEach((template, i) => {
-    const btn = document.createElement('button');
-    btn.className = 'template-option';
-    btn.setAttribute('role', 'option');
-    btn.setAttribute('aria-selected', i === 0 ? 'true' : 'false');
-    btn.innerHTML = `<span class="template-label">${template.label}</span><span class="template-desc">${template.description}</span>`;
-
-    btn.addEventListener('mousedown', (e) => {
-      e.preventDefault(); // prevent blur
-      applyTemplate(template);
-    });
-
-    templateMenu.appendChild(btn);
-  });
-
-  templateMenu.classList.remove('hidden');
-}
-
-function applyTemplate(template: (typeof BUILT_IN_TEMPLATES)[0]) {
-  const ctx = pageContext
-    ? { selection: pageContext.selectedText, pageText: pageContext.pageText }
-    : {};
-  chatInput.value = fillTemplate(template, ctx);
-  chatInput.style.height = 'auto';
-  chatInput.style.height = `${Math.min(chatInput.scrollHeight, 120)}px`;
-  sendBtn.disabled = false;
-  closeTemplateMenu();
-  chatInput.focus();
-}
-
-function closeTemplateMenu() {
-  templateMenu.classList.add('hidden');
-  templateMenu.innerHTML = '';
-}
-
-function setActiveOption(items: NodeListOf<HTMLButtonElement>, next: HTMLButtonElement) {
-  items.forEach((el) => el.setAttribute('aria-selected', 'false'));
-  next.setAttribute('aria-selected', 'true');
-  next.scrollIntoView({ block: 'nearest' });
-}
-
-// Close menu when clicking outside
-document.addEventListener('click', (e) => {
-  if (!templateMenu.contains(e.target as Node) && e.target !== chatInput) {
-    closeTemplateMenu();
-  }
-});
-
-async function doChat() {
-  const text = chatInput.value.trim();
-  if (!text || isBusy) return;
-
-  const userMsg: ChatMessage = {
-    id: `msg_${Date.now()}`,
-    role: 'user',
-    content: text,
-    timestamp: Date.now(),
-  };
-
-  messages.push(userMsg);
-  appendMessage(userMsg);
-  chatInput.value = '';
-  chatInput.style.height = 'auto';
-  sendBtn.disabled = true;
-  isBusy = true;
-
-  // Persist to session
-  if (!currentSessionId) {
-    const session = await sendMessage<{ id: string }>({ type: 'SESSION_CREATE', payload: userMsg });
-    currentSessionId = session.id;
-  } else {
-    await sendMessage({ type: 'SESSION_APPEND', payload: { sessionId: currentSessionId, message: userMsg } });
-  }
-
-  const thinkingEl = appendThinking();
-
-  try {
-    const response = await sendMessage<{ content: string } | { error: string }>({
-      type: 'CHAT_MESSAGE',
-      payload: { messages, context: pageContext },
-    });
-
-    thinkingEl.remove();
-
-    if ('error' in response) {
-      appendError(response.error);
-    } else {
-      const aiMsg: ChatMessage = {
-        id: `msg_${Date.now()}`,
-        role: 'assistant',
-        content: response.content,
-        timestamp: Date.now(),
-      };
-      messages.push(aiMsg);
-      appendMessage(aiMsg);
-      // Persist AI response
-      if (currentSessionId) {
-        await sendMessage({ type: 'SESSION_APPEND', payload: { sessionId: currentSessionId, message: aiMsg } });
+    // Restore previous session if any
+    const savedSessionId = await StorageManager.getCurrentSessionId();
+    if (savedSessionId) {
+      state.sessionId = savedSessionId;
+      try {
+        const messages = await client.getMessages(savedSessionId);
+        renderMessages(messages);
+      } catch {
+        // Session may be expired — start fresh
+        state.sessionId = null;
+        await StorageManager.setCurrentSessionId(null);
       }
     }
+
+    showView('chat');
   } catch (err) {
-    thinkingEl.remove();
-    appendError(err instanceof Error ? err.message : 'Failed to get response.');
-  } finally {
-    isBusy = false;
-    sendBtn.disabled = false;
-    chatMessages.scrollTop = chatMessages.scrollHeight;
+    // If init fails because tokens are invalid, fall back to login
+    console.error('Chat init failed:', err);
+    await StorageManager.clearTokens();
+    state.tokens = null;
+    showView('login');
   }
 }
 
-function appendMessage(msg: ChatMessage) {
-  chatMessages.querySelector('.empty-state')?.remove();
+// ─── Boot ─────────────────────────────────────────────────────────────────────
 
-  const div = document.createElement('div');
-  div.className = `message ${msg.role}`;
-  div.setAttribute('role', 'article');
-  div.setAttribute('aria-label', `${msg.role === 'user' ? 'You' : 'Assistant'}: ${msg.content.slice(0, 100)}`);
+async function boot(): Promise<void> {
+  state.settings = await StorageManager.getSettings();
+  applyTheme(state.settings.theme);
 
-  const bubble = document.createElement('div');
-  bubble.className = 'message-bubble';
-  if (msg.role === 'assistant') {
-    // Render markdown for AI responses
-    bubble.innerHTML = renderMarkdown(msg.content);
+  if (state.settings.acpServerUrl) {
+    serverUrlInput.value = state.settings.acpServerUrl;
+  }
+
+  state.tokens = await StorageManager.getTokens();
+
+  if (state.tokens) {
+    await initChatView();
   } else {
-    bubble.textContent = msg.content;
+    showView('login');
   }
-
-  const time = document.createElement('div');
-  time.className = 'message-time';
-  time.textContent = new Date(msg.timestamp).toLocaleTimeString([], {
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-
-  div.appendChild(bubble);
-  div.appendChild(time);
-  chatMessages.appendChild(div);
-  chatMessages.scrollTop = chatMessages.scrollHeight;
-  updateExportBtn();
-  return div;
 }
 
-function appendThinking() {
-  const div = document.createElement('div');
-  div.className = 'message assistant thinking';
-  div.setAttribute('role', 'status');
-  div.setAttribute('aria-live', 'polite');
-  div.setAttribute('aria-label', 'Assistant is thinking');
-  div.innerHTML = '<div class="message-bubble"><span class="thinking-dots"><span></span><span></span><span></span></span></div>';
-  chatMessages.appendChild(div);
-  chatMessages.scrollTop = chatMessages.scrollHeight;
-  return div;
-}
-
-function appendError(text: string) {
-  const div = document.createElement('div');
-  div.className = 'message assistant';
-  div.setAttribute('role', 'alert');
-  const bubble = document.createElement('div');
-  bubble.className = 'message-bubble error';
-  bubble.textContent = text;
-  div.appendChild(bubble);
-  chatMessages.appendChild(div);
-}
-
-// ── Export ─────────────────────────────────────────────────────────────────
-function exportConversation() {
-  if (messages.length === 0) return;
-
-  const date = new Date();
-  const header = `# Enterprise Assistant — Conversation Export\n\n_Exported ${date.toLocaleString()}_\n`;
-  const body = messages
-    .map((msg) => {
-      const role = msg.role === 'user' ? '**You**' : '**Assistant**';
-      const time = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      return `${role} _(${time})_\n\n${msg.content}`;
-    })
-    .join('\n\n---\n\n');
-
-  const text = `${header}\n---\n\n${body}\n`;
-  const blob = new Blob([text], { type: 'text/markdown;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = `enterprise-assistant-${date.toISOString().slice(0, 10)}.md`;
-  document.body.appendChild(anchor);
-  anchor.click();
-  document.body.removeChild(anchor);
-  URL.revokeObjectURL(url);
-}
-
-function updateExportBtn() {
-  exportBtn.classList.toggle('hidden', messages.length === 0);
-}
-
-// ── Summary ────────────────────────────────────────────────────────────────
-summarizeBtn.addEventListener('click', async () => {
-  summarizeBtn.disabled = true;
-  summarizeBtn.textContent = 'Summarizing…';
-  summaryContent.classList.add('hidden');
-
-  try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab.id || !tab.url) throw new Error('No active tab');
-
-    const result = await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      func: () => document.body?.innerText?.slice(0, 8000) ?? '',
-    });
-    const pageText = result[0]?.result ?? '';
-    if (pageText.length < 100) throw new Error('Not enough page content to summarize');
-
-    const summary = await sendMessage<{ summary: string; keyPoints: string[]; actionItems: string[] }>({
-      type: 'PAGE_SUMMARIZE',
-      payload: { pageText, url: tab.url, title: tab.title ?? '' },
-    });
-
-    summaryText.textContent = summary.summary;
-
-    keyPointsList.innerHTML = '';
-    summary.keyPoints.forEach((pt) => {
-      const li = document.createElement('li');
-      li.textContent = pt;
-      keyPointsList.appendChild(li);
-    });
-
-    if (summary.actionItems.length > 0) {
-      actionItemsList.innerHTML = '';
-      summary.actionItems.forEach((item) => {
-        const li = document.createElement('li');
-        li.textContent = item;
-        actionItemsList.appendChild(li);
-      });
-      actionItemsSection.classList.remove('hidden');
-    } else {
-      actionItemsSection.classList.add('hidden');
-    }
-
-    summaryContent.classList.remove('hidden');
-  } catch (err) {
-    summaryText.textContent = err instanceof Error ? err.message : 'Failed to summarize this page.';
-    keyPointsList.innerHTML = '';
-    actionItemsSection.classList.add('hidden');
-    summaryContent.classList.remove('hidden');
-  } finally {
-    summarizeBtn.disabled = false;
-    summarizeBtn.textContent = 'Summarize This Page';
-  }
-});
-
-// ── Tasks ──────────────────────────────────────────────────────────────────
-addTaskBtn.addEventListener('click', () => {
-  const isOpen = !addTaskForm.classList.contains('hidden');
-  addTaskForm.classList.toggle('hidden', isOpen);
-  if (!isOpen) taskTitleInput.focus();
-});
-
-cancelTaskBtn.addEventListener('click', () => {
-  addTaskForm.classList.add('hidden');
-  taskTitleInput.value = '';
-  taskDescInput.value = '';
-});
-
-saveTaskBtn.addEventListener('click', async () => {
-  const title = taskTitleInput.value.trim();
-  if (!title) {
-    taskTitleInput.focus();
-    return;
-  }
-
-  const task = await sendMessage<Task>({
-    type: 'TASK_CREATE',
-    payload: {
-      title,
-      description: taskDescInput.value.trim() || undefined,
-      priority: taskPrioritySelect.value as Task['priority'],
-      status: 'todo' as const,
-      tags: [],
-    },
-  });
-
-  tasks.push(task);
-  renderTasks();
-  taskTitleInput.value = '';
-  taskDescInput.value = '';
-  taskPrioritySelect.value = 'medium';
-  addTaskForm.classList.add('hidden');
-});
-
-async function loadTasks() {
-  tasks = await sendMessage<Task[]>({ type: 'TASK_LIST' });
-  renderTasks();
-}
-
-function renderTasks() {
-  tasksList.innerHTML = '';
-  if (tasks.length === 0) {
-    const li = document.createElement('li');
-    li.className = 'empty-state';
-    li.textContent = 'No tasks yet. Add one above.';
-    tasksList.appendChild(li);
-    return;
-  }
-
-  const sorted = [...tasks].sort((a, b) => {
-    const order: Record<Task['priority'], number> = { high: 0, medium: 1, low: 2 };
-    return order[a.priority] - order[b.priority];
-  });
-
-  sorted.forEach((task) => {
-    const li = document.createElement('li');
-    li.className = 'task-item';
-
-    const checkbox = document.createElement('input');
-    checkbox.type = 'checkbox';
-    checkbox.className = 'task-check';
-    checkbox.checked = task.status === 'done';
-    checkbox.id = `task-check-${task.id}`;
-    checkbox.setAttribute('aria-label', `Mark "${task.title}" as ${task.status === 'done' ? 'todo' : 'done'}`);
-
-    checkbox.addEventListener('change', async () => {
-      const newStatus: Task['status'] = checkbox.checked ? 'done' : 'todo';
-      await sendMessage({ type: 'TASK_UPDATE', payload: { id: task.id, updates: { status: newStatus } } });
-      task.status = newStatus;
-      titleEl.classList.toggle('done', checkbox.checked);
-    });
-
-    const body = document.createElement('div');
-    body.className = 'task-body';
-
-    const titleEl = document.createElement('label');
-    titleEl.className = `task-title${task.status === 'done' ? ' done' : ''}`;
-    titleEl.htmlFor = `task-check-${task.id}`;
-    titleEl.textContent = task.title;
-
-    body.appendChild(titleEl);
-    if (task.description) {
-      const desc = document.createElement('div');
-      desc.className = 'task-desc';
-      desc.textContent = task.description;
-      body.appendChild(desc);
-    }
-
-    const badge = document.createElement('span');
-    badge.className = `task-priority ${task.priority}`;
-    badge.textContent = task.priority;
-    badge.setAttribute('aria-label', `Priority: ${task.priority}`);
-
-    li.appendChild(checkbox);
-    li.appendChild(body);
-    li.appendChild(badge);
-    tasksList.appendChild(li);
-  });
-}
-
-// ── Display helpers ────────────────────────────────────────────────────────
-function showAuth() {
-  authScreen.classList.remove('hidden');
-  mainScreen.classList.add('hidden');
-  userBar.classList.add('hidden');
-}
-
-async function showMain() {
-  authScreen.classList.add('hidden');
-  mainScreen.classList.remove('hidden');
-  if (authState.user) {
-    userBar.classList.remove('hidden');
-    userName.textContent = authState.user.displayName || authState.user.email;
-    if (authState.user.avatarUrl) {
-      userAvatar.src = authState.user.avatarUrl;
-      userAvatar.classList.remove('hidden');
-    } else {
-      userAvatar.classList.add('hidden');
-    }
-  }
-  await loadTasks();
-}
-
-function showLoading(show: boolean) {
-  loadingOverlay.classList.toggle('hidden', !show);
-}
-
-// ── Messaging ──────────────────────────────────────────────────────────────
-function sendMessage<T>(message: Record<string, unknown>): Promise<T> {
-  return new Promise((resolve, reject) => {
-    chrome.runtime.sendMessage(message, (response: unknown) => {
-      if (chrome.runtime.lastError) {
-        reject(new Error(chrome.runtime.lastError.message));
-        return;
-      }
-      const r = response as Record<string, unknown> | null;
-      if (r && typeof r.error === 'string') {
-        reject(new Error(r.error));
-        return;
-      }
-      resolve(response as T);
-    });
-  });
-}
-
-// ── Boot ───────────────────────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', () => void init());
+void boot();

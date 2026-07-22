@@ -3,7 +3,6 @@
   "name": "__MSG_appName__",
   "version": "1.0.0",
   "description": "__MSG_appDescription__",
-  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAr4wiWQwMjOaS/UxBupXasPV74IJIP8D56QgbgW+E/un0NK2NNoSFH1pV/l/J7KEhugjb7Da//SwtWXnhM5JrF1i05ib3ss08/bb3/6V5DKFKkPX5MUoq1BjobP66wPhhuiXxFNxKHHq598u6UHUCFf4JRF/CWu9BOiuKY8P/+eDtC+QV0BOvtmom8XcUdu/+1QEr2r87Lw2kFq00Fy3uX4B+GpxX1ahiQpCE4rhoesJqRYD/IXvWkzj6HzVUN3a39aX+QHE4ZOWxdgOPboSZ4IveuiOTMnUIK9J+zIP+HoD2/epCXHg7k8DxVJP5IhPruxJj7SAv7pJO8dU2jPCrzQIDAQAB",
   "default_locale": "en",
   "icons": {
     "16": "assets/icons/icon16.png",
@@ -29,12 +28,8 @@
   },
   "content_scripts": [
     {
-      "matches": [
-        "<all_urls>"
-      ],
-      "js": [
-        "content/content-script.js"
-      ],
+      "matches": ["<all_urls>"],
+      "js": ["content/content-script.js"],
       "run_at": "document_idle",
       "all_frames": false
     }
@@ -45,30 +40,21 @@
   },
   "permissions": [
     "storage",
-    "identity",
     "tabs",
     "activeTab",
     "scripting",
-    "contextMenus",
     "notifications",
     "alarms",
     "sidePanel"
   ],
-  "host_permissions": [
-    "<all_urls>"
-  ],
+  "host_permissions": ["<all_urls>"],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' https:"
   },
   "web_accessible_resources": [
     {
-      "resources": [
-        "assets/*",
-        "content/styles.css"
-      ],
-      "matches": [
-        "<all_urls>"
-      ]
+      "resources": ["assets/*"],
+      "matches": ["<all_urls>"]
     }
   ],
   "commands": {
@@ -78,13 +64,6 @@
         "mac": "Command+Shift+A"
       },
       "description": "Open Enterprise Assistant"
-    },
-    "toggle_sidebar": {
-      "suggested_key": {
-        "default": "Ctrl+Shift+S",
-        "mac": "Command+Shift+S"
-      },
-      "description": "Toggle assistant sidebar"
     }
   }
 }

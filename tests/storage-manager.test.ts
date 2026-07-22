@@ -1,89 +1,133 @@
 import { StorageManager } from '../src/background/storage-manager';
-import type { Task } from '../src/types';
+import type { Settings, AuthTokens } from '../src/types';
 
-// Mock chrome storage APIs
-const store: Record<string, unknown> = {};
+// Mock chrome APIs
+const mockStorage = {
+  sync: {} as Record<string, unknown>,
+  session: {} as Record<string, unknown>,
+  local: {} as Record<string, unknown>,
+};
+
+const makeMockArea = (store: Record<string, unknown>) => ({
+  get: jest.fn(async (keys: string | string[] | Record<string, unknown>) => {
+    if (typeof keys === 'string') {
+      return { [keys]: store[keys] };
+    }
+    if (Array.isArray(keys)) {
+      return Object.fromEntries(keys.map((k) => [k, store[k]]));
+    }
+    // defaults object
+    const result: Record<string, unknown> = {};
+    for (const [k, defaultVal] of Object.entries(keys as Record<string, unknown>)) {
+      result[k] = k in store ? store[k] : defaultVal;
+    }
+    return result;
+  }),
+  set: jest.fn(async (items: Record<string, unknown>) => {
+    Object.assign(store, items);
+  }),
+  remove: jest.fn(async (keys: string | string[]) => {
+    const ks = Array.isArray(keys) ? keys : [keys];
+    ks.forEach((k) => delete store[k]);
+  }),
+});
 
 global.chrome = {
   storage: {
-    sync: {
-      get: jest.fn((key: string) => Promise.resolve({ [key]: store[key] })),
-      set: jest.fn((obj: Record<string, unknown>) => {
-        Object.assign(store, obj);
-        return Promise.resolve();
-      }),
-    },
-    local: {
-      get: jest.fn((key: string) => Promise.resolve({ [key]: store[key] })),
-      set: jest.fn((obj: Record<string, unknown>) => {
-        Object.assign(store, obj);
-        return Promise.resolve();
-      }),
-    },
-    session: {
-      get: jest.fn((key: string) => Promise.resolve({ [key]: store[key] })),
-      set: jest.fn((obj: Record<string, unknown>) => {
-        Object.assign(store, obj);
-        return Promise.resolve();
-      }),
-      remove: jest.fn((key: string) => {
-        delete store[key];
-        return Promise.resolve();
-      }),
-    },
+    sync: makeMockArea(mockStorage.sync),
+    session: makeMockArea(mockStorage.session),
+    local: makeMockArea(mockStorage.local),
   },
 } as unknown as typeof chrome;
 
+beforeEach(() => {
+  // Clear stores
+  Object.keys(mockStorage.sync).forEach((k) => delete mockStorage.sync[k]);
+  Object.keys(mockStorage.session).forEach((k) => delete mockStorage.session[k]);
+  Object.keys(mockStorage.local).forEach((k) => delete mockStorage.local[k]);
+
+  // Reset mock call counts
+  jest.clearAllMocks();
+});
+
 describe('StorageManager', () => {
-  let storage: StorageManager;
-
-  beforeEach(() => {
-    storage = new StorageManager();
-    Object.keys(store).forEach((k) => delete store[k]);
-  });
-
-  it('returns default settings when none stored', async () => {
-    const settings = await storage.getSettings();
-    expect(settings.modelId).toBe('claude-sonnet-4-6');
-    expect(settings.maxTokens).toBe(4096);
-  });
-
-  it('saves and retrieves settings', async () => {
-    await storage.updateSettings({ maxTokens: 1024 });
-    const settings = await storage.getSettings();
-    expect(settings.maxTokens).toBe(1024);
-  });
-
-  it('creates a task with generated id', async () => {
-    const task = await storage.createTask({
-      title: 'Test task',
-      status: 'todo',
-      priority: 'medium',
+  describe('getSettings', () => {
+    test('returns defaults when nothing stored', async () => {
+      const settings = await StorageManager.getSettings();
+      expect(settings.acpServerUrl).toBe('');
+      expect(settings.notifications).toBe(true);
+      expect(settings.theme).toBe('system');
     });
-    expect(task.id).toMatch(/^task_/);
-    expect(task.title).toBe('Test task');
-    expect(task.createdAt).toBeGreaterThan(0);
+
+    test('returns saved values when stored', async () => {
+      await StorageManager.saveSettings({
+        acpServerUrl: 'https://example.com',
+        notifications: false,
+        theme: 'dark',
+      });
+      const settings = await StorageManager.getSettings();
+      expect(settings.acpServerUrl).toBe('https://example.com');
+      expect(settings.notifications).toBe(false);
+      expect(settings.theme).toBe('dark');
+    });
   });
 
-  it('lists created tasks', async () => {
-    await storage.createTask({ title: 'A', status: 'todo', priority: 'low' });
-    await storage.createTask({ title: 'B', status: 'todo', priority: 'high' });
-    const tasks = await storage.getTasks();
-    expect(tasks).toHaveLength(2);
+  describe('saveSettings', () => {
+    test('persists partial updates without overwriting other fields', async () => {
+      await StorageManager.saveSettings({ acpServerUrl: 'https://initial.com' });
+      await StorageManager.saveSettings({ theme: 'light' });
+      const settings = await StorageManager.getSettings();
+      expect(settings.acpServerUrl).toBe('https://initial.com');
+      expect(settings.theme).toBe('light');
+    });
   });
 
-  it('updates a task', async () => {
-    const task = await storage.createTask({ title: 'C', status: 'todo', priority: 'medium' });
-    await storage.updateTask(task.id, { status: 'done' });
-    const tasks = await storage.getTasks();
-    const updated = tasks.find((t: Task) => t.id === task.id);
-    expect(updated?.status).toBe('done');
+  describe('tokens', () => {
+    test('returns null when no tokens stored', async () => {
+      const tokens = await StorageManager.getTokens();
+      expect(tokens).toBeNull();
+    });
+
+    test('saves and retrieves tokens', async () => {
+      const tokens: AuthTokens = {
+        accessToken: 'access-123',
+        refreshToken: 'refresh-456',
+        expiresAt: Date.now() + 3600_000,
+      };
+      await StorageManager.saveTokens(tokens);
+      const retrieved = await StorageManager.getTokens();
+      expect(retrieved).toEqual(tokens);
+    });
+
+    test('clearTokens removes stored tokens', async () => {
+      const tokens: AuthTokens = {
+        accessToken: 'access-123',
+        expiresAt: Date.now() + 3600_000,
+      };
+      await StorageManager.saveTokens(tokens);
+      await StorageManager.clearTokens();
+      const retrieved = await StorageManager.getTokens();
+      expect(retrieved).toBeNull();
+    });
   });
 
-  it('deletes a task', async () => {
-    const task = await storage.createTask({ title: 'D', status: 'todo', priority: 'low' });
-    await storage.deleteTask(task.id);
-    const tasks = await storage.getTasks();
-    expect(tasks.find((t: Task) => t.id === task.id)).toBeUndefined();
+  describe('session management', () => {
+    test('returns null when no session set', async () => {
+      const id = await StorageManager.getCurrentSessionId();
+      expect(id).toBeNull();
+    });
+
+    test('saves and retrieves session ID', async () => {
+      await StorageManager.setCurrentSessionId('sess-abc');
+      const id = await StorageManager.getCurrentSessionId();
+      expect(id).toBe('sess-abc');
+    });
+
+    test('clears session ID when set to null', async () => {
+      await StorageManager.setCurrentSessionId('sess-abc');
+      await StorageManager.setCurrentSessionId(null);
+      const id = await StorageManager.getCurrentSessionId();
+      expect(id).toBeNull();
+    });
   });
 });

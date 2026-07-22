@@ -1,46 +1,8 @@
 {
   "appName": {
-    "message": "Enterprise Assistant",
-    "description": "The name of the extension"
+    "message": "Enterprise Assistant"
   },
   "appDescription": {
-    "message": "AI-powered enterprise assistant for productivity, summarization, and task management",
-    "description": "Extension description shown in the Chrome Web Store"
-  },
-  "signIn": {
-    "message": "Sign In",
-    "description": "Sign-in button label"
-  },
-  "signOut": {
-    "message": "Sign out",
-    "description": "Sign-out link label"
-  },
-  "authDescription": {
-    "message": "Sign in with your enterprise account to get started.",
-    "description": "Auth screen subtitle"
-  },
-  "chatPlaceholder": {
-    "message": "Ask anything, or type / for templates…",
-    "description": "Chat input placeholder"
-  },
-  "summarizeBtn": {
-    "message": "Summarize This Page",
-    "description": "Button to trigger page summarization"
-  },
-  "addTask": {
-    "message": "+ Add Task",
-    "description": "Button to open the add task form"
-  },
-  "settingsTitle": {
-    "message": "Enterprise Assistant Settings",
-    "description": "Options page title"
-  },
-  "saveSettings": {
-    "message": "Save Settings",
-    "description": "Save button label"
-  },
-  "resetDefaults": {
-    "message": "Reset to Defaults",
-    "description": "Reset button label"
+    "message": "AI-powered enterprise assistant connected to your ACP platform"
   }
 }
