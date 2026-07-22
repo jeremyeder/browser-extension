@@ -27,23 +27,32 @@ export class AuthManager {
     };
   }
 
-  async login(): Promise<AuthState> {
+  async login(credentials?: { username: string; password: string }): Promise<AuthState> {
+    if (!credentials) throw new Error('Credentials required');
+
     const settings = await this.storage.getSettings();
-    const authUrl = await this.buildAuthUrl(settings);
-    const redirectUrl = chrome.identity.getRedirectURL('oauth2');
+    const tokenUrl = settings.ssoTokenUrl ?? this.getDefaultTokenUrl(settings);
 
-    console.log('[AUTH] Auth URL:', authUrl);
-    console.log('[AUTH] Redirect URL:', redirectUrl);
-    console.log('[AUTH] Settings:', JSON.stringify({ ssoProvider: settings.ssoProvider, ssoClientId: settings.ssoClientId, apiEndpoint: settings.apiEndpoint, ssoKeycloakIssuer: settings.ssoKeycloakIssuer }));
-
-    const responseUrl = await chrome.identity.launchWebAuthFlow({
-      url: authUrl,
-      interactive: true,
+    const body = new URLSearchParams({
+      grant_type: 'password',
+      client_id: settings.ssoClientId,
+      username: credentials.username,
+      password: credentials.password,
+      scope: 'openid profile email',
     });
 
-    if (!responseUrl) throw new Error('Authentication cancelled');
+    const resp = await fetch(tokenUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString(),
+    });
 
-    const tokenData = await this.exchangeCodeForToken(responseUrl, redirectUrl, settings);
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.error_description ?? err.error ?? `Authentication failed (${resp.status})`);
+    }
+
+    const tokenData = await resp.json() as OAuthTokenResponse;
     const user = await this.fetchUserProfile(tokenData.access_token, settings);
     const expiresAt = Date.now() + tokenData.expires_in * 1000;
 
@@ -88,65 +97,10 @@ export class AuthManager {
     }
   }
 
-  private async buildAuthUrl(settings: ExtensionSettings): Promise<string> {
-    const redirectUrl = chrome.identity.getRedirectURL('oauth2');
-    const state = crypto.randomUUID();
-    const codeVerifier = this.generateCodeVerifier();
-    const codeChallenge = await this.generateCodeChallenge(codeVerifier);
-
-    // Store PKCE values in session — cleared after exchange
-    await chrome.storage.session.set({ oauth_state: state, code_verifier: codeVerifier });
-
-    const params = new URLSearchParams({
-      client_id: settings.ssoClientId,
-      response_type: 'code',
-      redirect_uri: redirectUrl,
-      scope: 'openid profile email',
-      state,
-      code_challenge: codeChallenge,
-      code_challenge_method: 'S256',
-    });
-
-    const authUrl = settings.ssoAuthUrl ?? this.getDefaultAuthUrl(settings);
-    return `${authUrl}?${params.toString()}`;
-  }
-
-  private getDefaultAuthUrl(settings: ExtensionSettings): string {
-    switch (settings.ssoProvider) {
-      case 'keycloak': {
-        const issuer = this.resolveKeycloakIssuer(settings);
-        return `${issuer}/protocol/openid-connect/auth`;
-      }
-      case 'azure':
-        return 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize';
-      case 'okta': {
-        const domain = this.resolveOktaDomain(settings);
-        return `https://${domain}/oauth2/v1/authorize`;
-      }
-      case 'google':
-        return 'https://accounts.google.com/o/oauth2/v2/auth';
-      default:
-        throw new Error('ssoAuthUrl must be configured for custom provider');
-    }
-  }
 
   private getDefaultTokenUrl(settings: ExtensionSettings): string {
-    switch (settings.ssoProvider) {
-      case 'keycloak': {
-        const issuer = this.resolveKeycloakIssuer(settings);
-        return `${issuer}/protocol/openid-connect/token`;
-      }
-      case 'azure':
-        return 'https://login.microsoftonline.com/common/oauth2/v2.0/token';
-      case 'okta': {
-        const domain = this.resolveOktaDomain(settings);
-        return `https://${domain}/oauth2/v1/token`;
-      }
-      case 'google':
-        return 'https://oauth2.googleapis.com/token';
-      default:
-        throw new Error('ssoTokenUrl must be configured for custom provider');
-    }
+    const issuer = this.resolveKeycloakIssuer(settings);
+    return `${issuer}/protocol/openid-connect/token`;
   }
 
   private resolveKeycloakIssuer(settings: ExtensionSettings): string {
@@ -164,62 +118,6 @@ export class AuthManager {
     } catch {
       throw new Error('Invalid ACP Server URL — cannot derive Keycloak issuer');
     }
-  }
-
-  /** Okta uses a subdomain (e.g. "mycompany") separate from the OAuth client_id. */
-  private resolveOktaDomain(settings: ExtensionSettings): string {
-    const domain = settings.ssoOktaDomain.trim();
-    if (!domain) throw new Error('Okta organisation domain must be configured (ssoOktaDomain)');
-    // Accept either "mycompany" or "mycompany.okta.com"
-    return domain.includes('.') ? domain : `${domain}.okta.com`;
-  }
-
-  private async exchangeCodeForToken(
-    responseUrl: string,
-    redirectUrl: string,
-    settings: ExtensionSettings,
-  ): Promise<OAuthTokenResponse> {
-    const url = new URL(responseUrl);
-
-    // Surface IdP errors instead of passing an empty code to the token endpoint
-    const errorCode = url.searchParams.get('error');
-    if (errorCode) {
-      const description = url.searchParams.get('error_description') ?? errorCode;
-      throw new Error(`Authentication denied by IdP: ${description}`);
-    }
-
-    const code = url.searchParams.get('code');
-    if (!code) throw new Error('No authorization code in redirect URL');
-
-    const state = url.searchParams.get('state');
-    const stored = await chrome.storage.session.get(['oauth_state', 'code_verifier']);
-    await chrome.storage.session.remove(['oauth_state', 'code_verifier']);
-
-    if (stored.oauth_state !== state) {
-      throw new Error('OAuth state mismatch — possible CSRF attack');
-    }
-
-    const tokenUrl = settings.ssoTokenUrl ?? this.getDefaultTokenUrl(settings);
-    const body = new URLSearchParams({
-      grant_type: 'authorization_code',
-      client_id: settings.ssoClientId,
-      code,
-      redirect_uri: redirectUrl,
-      code_verifier: stored.code_verifier as string,
-    });
-
-    const response = await fetch(tokenUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: body.toString(),
-    });
-
-    if (!response.ok) {
-      const body = await response.text().catch(() => '');
-      throw new Error(`Token exchange failed (${response.status}): ${body}`);
-    }
-
-    return response.json() as Promise<OAuthTokenResponse>;
   }
 
   private async refreshToken(
@@ -258,19 +156,8 @@ export class AuthManager {
     accessToken: string,
     settings: ExtensionSettings,
   ): Promise<UserProfile> {
-    let userInfoUrl: string;
-    if (settings.ssoProvider === 'google') {
-      userInfoUrl = 'https://www.googleapis.com/oauth2/v2/userinfo';
-    } else if (settings.ssoProvider === 'azure') {
-      userInfoUrl = 'https://graph.microsoft.com/v1.0/me?$select=id,mail,displayName,userPrincipalName';
-    } else if (settings.ssoProvider === 'okta') {
-      const domain = this.resolveOktaDomain(settings);
-      userInfoUrl = `https://${domain}/oauth2/v1/userinfo`;
-    } else {
-      // Custom OIDC — standard userinfo endpoint derived from authUrl
-      const base = settings.ssoAuthUrl ?? '';
-      userInfoUrl = base.replace(/\/authorize$/, '/userinfo');
-    }
+    const issuer = this.resolveKeycloakIssuer(settings);
+    const userInfoUrl = `${issuer}/protocol/openid-connect/userinfo`;
 
     const response = await fetch(userInfoUrl, {
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -291,24 +178,6 @@ export class AuthManager {
     };
   }
 
-  private generateCodeVerifier(): string {
-    const array = new Uint8Array(32);
-    crypto.getRandomValues(array);
-    return btoa(String.fromCharCode(...array))
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=/g, '');
-  }
-
-  private async generateCodeChallenge(verifier: string): Promise<string> {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(verifier);
-    const hash = await crypto.subtle.digest('SHA-256', data);
-    return btoa(String.fromCharCode(...new Uint8Array(hash)))
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=/g, '');
-  }
 }
 
 interface OAuthTokenResponse {

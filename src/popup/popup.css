@@ -48,9 +48,7 @@
 body {
   font-family: var(--font);
   font-size: 13px;
-  width: 380px;
-  min-height: 520px;
-  max-height: 600px;
+  min-height: 100vh;
   background: var(--color-bg);
   color: var(--color-text);
   display: flex;
@@ -84,6 +82,15 @@ body {
 .logo img { width: 48px; height: 48px; }
 .logo h1 { font-size: 18px; font-weight: 600; }
 .auth-description { color: var(--color-text-secondary); text-align: center; line-height: 1.5; }
+
+.login-form { display: flex; flex-direction: column; gap: 10px; width: 100%; }
+.login-form .input {
+  padding: 10px 12px; border: 1px solid var(--color-border); border-radius: var(--radius);
+  background: var(--color-bg); color: var(--color-text); font-size: 13px; font-family: var(--font);
+}
+.login-form .input:focus { outline: none; border-color: var(--color-primary); }
+.login-error { color: var(--color-error); font-size: 12px; text-align: center; padding: 4px; }
+.btn-full { width: 100%; }
 
 /* Header */
 .header {

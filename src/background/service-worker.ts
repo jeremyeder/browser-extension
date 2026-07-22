@@ -76,7 +76,7 @@ async function handleMessage(
       return auth.getState();
 
     case 'AUTH_LOGIN':
-      return auth.login();
+      return auth.login(message.payload as { username: string; password: string });
 
     case 'AUTH_LOGOUT':
       await auth.logout();

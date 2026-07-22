@@ -116,16 +116,26 @@ settingsBtn.addEventListener('click', () => {
 exportBtn.addEventListener('click', () => exportConversation());
 
 // ── Auth ───────────────────────────────────────────────────────────────────
-loginBtn.addEventListener('click', async () => {
+const loginForm = $<HTMLFormElement>('login-form');
+const loginUsername = $<HTMLInputElement>('login-username');
+const loginPassword = $<HTMLInputElement>('login-password');
+const loginError = $<HTMLDivElement>('login-error');
+
+loginForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
   loginBtn.disabled = true;
   loginBtn.textContent = 'Signing in…';
+  loginError.classList.add('hidden');
   try {
-    authState = await sendMessage<AuthState>({ type: 'AUTH_LOGIN' });
+    authState = await sendMessage<AuthState>({
+      type: 'AUTH_LOGIN',
+      payload: { username: loginUsername.value, password: loginPassword.value },
+    });
     if (authState.isAuthenticated) await showMain();
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error('Login failed', err);
-    alert(`Sign in failed: ${msg}`);
+    loginError.textContent = msg;
+    loginError.classList.remove('hidden');
   } finally {
     loginBtn.disabled = false;
     loginBtn.textContent = 'Sign In';
