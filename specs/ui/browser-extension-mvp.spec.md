@@ -407,12 +407,16 @@ The E2E test suite SHALL include a `session-boot-perf` test that:
 
 ### Next Phase: SSE Streaming
 The MVP uses REST polling (every 1.5s) for message retrieval. The next
-phase SHALL implement SSE streaming for real-time token-by-token rendering.
-ACP exposes gRPC `WatchSessionMessages` but no REST SSE proxy currently
-exists. Options:
-1. Add an SSE proxy endpoint to the API server (preferred)
-2. Use gRPC-Web from the browser extension
-3. Continue fast polling (500ms) with incremental message rendering
+phase SHALL implement SSE streaming using the EXISTING ACP endpoints:
+
+- `GET /api/ambient/v1/sessions/{id}/events` — SSE proxy to runner's live event stream
+- `GET /api/ambient/v1/sessions/{id}/agui/events` — AG-UI event stream (tool calls, thinking, text)
+- `GET /api/ambient/v1/sessions/{id}/events/history` — persisted events for replay
+
+The browser extension SHALL use EventSource connected to the `/events`
+endpoint for real-time token streaming. AG-UI events include
+TEXT_MESSAGE_CONTENT (streaming tokens), TEXT_MESSAGE_END, RUN_STARTED,
+RUN_FINISHED, and tool call events.
 
 ### Next Phase: Show Thinking
 Settings SHALL include an "Enable show thinking" toggle that renders the
